@@ -174,6 +174,43 @@ test('playlist offline deduplica bytes, promove referência individual e coleta 
   }).toEqual({ manifest: 0, cache: 0 });
 });
 
+test('duas coleções compartilham arquivos e só a última referência remove os bytes', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium');
+  await login(page);
+  await ensureServiceWorkerControl(page);
+  const first = await createCollection(page, testInfo, 2);
+  await page.goto(`/library/playlists/${encodeURIComponent(first.playlist.id)}`);
+  await page.getByRole('button', { name: 'Disponibilizar offline', exact: true }).click();
+  await expect.poll(async () => {
+    const state = await offlineStorageSnapshot(page);
+    return [state.cacheEntries, state.physicalTrackIds.length, state.collections.length];
+  }).toEqual([2, 2, 1]);
+
+  const second = await createCollection(page, testInfo, 2);
+  await page.goto(`/library/playlists/${encodeURIComponent(second.playlist.id)}`);
+  await page.getByRole('button', { name: 'Disponibilizar offline', exact: true }).click();
+  await expect.poll(async () => {
+    const state = await offlineStorageSnapshot(page);
+    return [state.cacheEntries, state.physicalTrackIds.length, state.collections.length];
+  }).toEqual([2, 2, 2]);
+
+  await page.goto(`/library/playlists/${encodeURIComponent(first.playlist.id)}`);
+  page.once('dialog', dialog => void dialog.accept());
+  await page.getByRole('button', { name: `Remover ${first.playlist.name} do modo offline` }).click();
+  await expect.poll(async () => {
+    const state = await offlineStorageSnapshot(page);
+    return [state.cacheEntries, state.physicalTrackIds.length, state.collections.length];
+  }).toEqual([2, 2, 1]);
+
+  await page.goto(`/library/playlists/${encodeURIComponent(second.playlist.id)}`);
+  page.once('dialog', dialog => void dialog.accept());
+  await page.getByRole('button', { name: `Remover ${second.playlist.name} do modo offline` }).click();
+  await expect.poll(async () => {
+    const state = await offlineStorageSnapshot(page);
+    return [state.cacheEntries, state.physicalTrackIds.length, state.collections.length];
+  }).toEqual([0, 0, 0]);
+});
+
 test('controle de coleção offline funciona no layout mobile', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile-chromium');
 

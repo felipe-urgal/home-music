@@ -280,7 +280,7 @@ function downloadError(error: unknown) {
   return new Error('Não foi possível salvar esta música para uso offline.');
 }
 
-function collectionStatus(
+export function collectionStatus(
   reference: OfflineCollectionReference,
   downloadedIds: ReadonlySet<string>,
   downloadingIds: ReadonlySet<string>,
@@ -392,6 +392,14 @@ export function useOfflineDownloads() {
   }, []);
 
   useEffect(() => {
+    // Stop collection workers as soon as the owner changes. A paused or
+    // cancelled collection must not enqueue fresh transfers for the old owner.
+    for (const [key, control] of collectionControlsRef.current) {
+      if (!userId || !key.startsWith(`${encodeURIComponent(userId)}:`)) {
+        control.cancelled = true;
+        collectionControlsRef.current.delete(key);
+      }
+    }
     for (const [key, controller] of transferControllersRef.current) {
       if (!userId || !key.startsWith(`${encodeURIComponent(userId)}:`)) {
         controller.abort();
@@ -510,7 +518,12 @@ export function useOfflineDownloads() {
     if (!current.some(record => record.track.id === trackId)) {
       if (!isOfflineTrackReferenced(readReferences(ownerUserId), trackId)) {
         const cache = await caches.open(offlineAudioCacheName(ownerUserId));
-        await cache.delete(streamUrl(trackId));
+        // Another mutation may acquire the reference while Cache Storage opens.
+        if (isOfflineTrackReferenced(readReferences(ownerUserId), trackId)) return;
+        const deleted = await cache.delete(streamUrl(trackId));
+        if (!deleted && await cache.match(streamUrl(trackId))) {
+          throw new Error('Não foi possível remover o arquivo do armazenamento.');
+        }
       }
       return;
     }
@@ -527,6 +540,9 @@ export function useOfflineDownloads() {
     if (!deleted && await cache.match(streamUrl(trackId))) {
       throw new Error('Não foi possível remover o arquivo do armazenamento.');
     }
+    // If another collection has claimed this track while deletion was pending,
+    // retain its manifest entry. Its bytes can be recovered by retrying later.
+    if (isOfflineTrackReferenced(readReferences(ownerUserId), trackId)) return;
     // Another download may have completed during deletion: do not publish the
     // stale manifest snapshot and accidentally hide unrelated downloaded tracks.
     const latestRecords = readManifest(ownerUserId);
@@ -534,11 +550,13 @@ export function useOfflineDownloads() {
   }, [replaceRecords]);
 
   const ensurePhysicalDownload = useCallback(async (track: Track, ownerUserId: string) => {
+    if (activeUserIdRef.current !== ownerUserId) return;
     if (readManifest(ownerUserId).some(record => record.track.id === track.id)) return;
     if (!isOfflineTrackReferenced(readReferences(ownerUserId), track.id)) return;
 
     const jobKey = downloadJobKey(ownerUserId, track.id);
     await offlineDownloadScheduler.enqueue(jobKey, async () => {
+      if (activeUserIdRef.current !== ownerUserId) return;
       if (readManifest(ownerUserId).some(record => record.track.id === track.id)) return;
       if (!isOfflineTrackReferenced(readReferences(ownerUserId), track.id)) return;
       const url = streamUrl(track.id);
