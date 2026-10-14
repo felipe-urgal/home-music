@@ -559,7 +559,7 @@ function userResponse(identity: OpenSubsonicAuthenticatedKey) {
     downloadRole: false,
     uploadRole: false,
     playlistRole: true,
-    coverArtRole: false,
+    coverArtRole: true,
     commentRole: false,
     podcastRole: false,
     streamRole: true,

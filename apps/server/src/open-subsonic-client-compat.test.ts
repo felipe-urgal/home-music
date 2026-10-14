@@ -51,6 +51,11 @@ test('OpenSubsonic aceita app key como password legado sem aceitar senha web', a
     assert.equal(legacyBody.status, 'ok');
     assert.equal(legacyBody.user.username, 'alice');
     assert.equal(legacyBody.user.streamRole, true);
+    assert.equal(legacyBody.user.coverArtRole, true);
+    assert.equal(legacyBody.user.playlistRole, true);
+    assert.equal(legacyBody.user.scrobblingEnabled, true);
+    assert.equal(legacyBody.user.downloadRole, false);
+    assert.equal(legacyBody.user.uploadRole, false);
     assert.deepEqual(legacyBody.user.folder, ['1']);
 
     const wrongPassword = await app.inject({
