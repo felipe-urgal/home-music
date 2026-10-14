@@ -92,3 +92,32 @@ test('OpenSubsonic preserva apiKey nativa e impede username cruzado no getUser',
     await app.close();
   }
 });
+
+test('OpenSubsonic explicita contrato JSON-only para f=json, ausente e formatos não suportados', async () => {
+  const app = createServer();
+  await app.ready();
+
+  try {
+    for (const suffix of ['&f=json', '']) {
+      const response = await app.inject({
+        method: 'GET',
+        url: `/rest/ping.view?apiKey=key-a&v=1.16.1&c=contract-tests${suffix}`
+      });
+      assert.equal(response.statusCode, 200);
+      assert.match(response.headers['content-type'] as string, /^application\\/json/);
+      assert.equal(response.json()['subsonic-response'].status, 'ok');
+    }
+
+    for (const suffix of ['&f=xml', '&f=jsonp', '&f=unknown']) {
+      const response = await app.inject({
+        method: 'GET',
+        url: `/rest/ping.view?apiKey=key-a&v=1.16.1&c=contract-tests${suffix}`
+      });
+      assert.equal(response.statusCode, 200);
+      assert.equal(response.json()['subsonic-response'].status, 'failed');
+      assert.equal(response.json()['subsonic-response'].error.code, 0);
+    }
+  } finally {
+    await app.close();
+  }
+});
