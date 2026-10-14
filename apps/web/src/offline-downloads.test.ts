@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Track } from '@home-music/shared';
 import {
+  collectionStatus,
   formatOfflineBytes,
   offlineAudioCacheName,
   offlineAudioUrl,
@@ -56,4 +57,36 @@ describe('offline downloads', () => {
     expect(formatOfflineBytes(1024)).toBe('1.00 KB');
     expect(formatOfflineBytes(12 * 1024 * 1024)).toBe('12.0 MB');
   });
+
+  it('coleção parcial recupera após retry sem descartar bytes já válidos', () => {
+    const reference = {
+      kind: 'playlist' as const,
+      sourceId: 'retry',
+      name: 'Recuperação',
+      trackIds: ['valid', 'missing'],
+      updatedAt: '2026-10-14T00:00:00.000Z'
+    };
+    const runtime = {
+      userId: 'account-a',
+      syncingKeys: new Set<string>(),
+      pausedKeys: new Set<string>(),
+      errors: new Map<string, string>()
+    };
+    const valid = new Set(['valid']);
+    const noTransfers = new Set<string>();
+    const partial = collectionStatus(reference, valid, noTransfers, runtime);
+    expect(partial).toMatchObject({ status: 'partial', downloadedCount: 1, totalCount: 2 });
+    const key = 'playlist:retry';
+    runtime.errors.set(key, 'Rede indisponível');
+    const errored = collectionStatus(reference, valid, noTransfers, runtime);
+    expect(errored).toMatchObject({ status: 'error', downloadedCount: 1 });
+    runtime.errors.delete(key);
+    runtime.syncingKeys.add(key);
+    const retrying = collectionStatus(reference, valid, new Set(['missing']), runtime);
+    expect(retrying).toMatchObject({ status: 'downloading', downloadedCount: 1, downloadingCount: 1 });
+    runtime.syncingKeys.delete(key);
+    const available = collectionStatus(reference, new Set(['valid', 'missing']), noTransfers, runtime);
+    expect(available).toMatchObject({ status: 'available', downloadedCount: 2, error: null });
+  });
+
 });
