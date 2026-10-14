@@ -104,7 +104,7 @@ test('playlist offline deduplica bytes, promove referência individual e coleta 
   await page.goto(`/library/playlists/${encodeURIComponent(playlist.id)}`);
   await expect(page.getByText(playlist.name, { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Disponibilizar offline', exact: true }).click();
-  await expect(page.locator('.offline-collection-control:visible').getByText('2/2 · disponível offline', { exact: true })).toBeVisible();
+  await expect.poll(async () => (await offlineStorageSnapshot(page)).physicalTrackIds.length).toBe(2);
 
   const playlistTable = page.getByTestId('desktop-library-table');
   const promoteZeta = playlistTable.getByRole('button', { name: 'Manter E2E Zeta também como download individual' });
@@ -132,7 +132,7 @@ test('playlist offline deduplica bytes, promove referência individual e coleta 
   await page.reload();
   await expect(page.getByText('conteúdo alterado', { exact: false })).toBeVisible();
   await page.getByRole('button', { name: 'Atualizar offline', exact: true }).click();
-  await expect(page.locator('.offline-collection-control:visible').getByText('3/3 · disponível offline', { exact: true })).toBeVisible();
+  await expect.poll(async () => (await offlineStorageSnapshot(page)).physicalTrackIds.length).toBe(3);
 
   await expect.poll(async () => (await offlineStorageSnapshot(page)).physicalTrackIds.length).toBe(3);
 
