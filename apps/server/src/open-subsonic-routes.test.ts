@@ -342,3 +342,30 @@ test('OpenSubsonic falha explicitamente para endpoint fora do subset', async () 
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('getRandomSongs respeita limites, pasta e retorna faixas sem duplicação', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'home-music-open-subsonic-random-'));
+  const mediaPath = path.join(root, 'track.mp3');
+  await writeFile(mediaPath, Buffer.from('0123456789'));
+  const { app } = await createTestServer(mediaPath);
+  try {
+    for (const size of [0, 1, 2, 500]) {
+      const response = await app.inject({ method: 'GET', url: `/rest/getRandomSongs.view?apiKey=key-a&f=json&size=${size}` });
+      const body = responseBody(response)['subsonic-response'];
+      assert.equal(body.status, 'ok');
+      const songs = body.randomSongs.song;
+      assert.equal(songs.length, Math.min(size, 2));
+      assert.equal(new Set(songs.map((song: { id: string }) => song.id)).size, songs.length);
+      assert.ok(songs.every((song: { id: string }) => ['track-1', 'track-2'].includes(song.id)));
+    }
+    for (const size of ['501', '-1', 'abc']) {
+      const response = await app.inject({ method: 'GET', url: `/rest/getRandomSongs?apiKey=key-a&size=${size}` });
+      assert.equal(responseBody(response)['subsonic-response'].error.code, 10);
+    }
+    const invalidFolder = await app.inject({ method: 'GET', url: '/rest/getRandomSongs?apiKey=key-a&musicFolderId=other' });
+    assert.equal(responseBody(invalidFolder)['subsonic-response'].error.code, 70);
+  } finally {
+    await app.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
