@@ -392,6 +392,14 @@ export function useOfflineDownloads() {
   }, []);
 
   useEffect(() => {
+    // Stop collection workers as soon as the owner changes. A paused or
+    // cancelled collection must not enqueue fresh transfers for the old owner.
+    for (const [key, control] of collectionControlsRef.current) {
+      if (!userId || !key.startsWith(`${encodeURIComponent(userId)}:`)) {
+        control.cancelled = true;
+        collectionControlsRef.current.delete(key);
+      }
+    }
     for (const [key, controller] of transferControllersRef.current) {
       if (!userId || !key.startsWith(`${encodeURIComponent(userId)}:`)) {
         controller.abort();
@@ -542,11 +550,13 @@ export function useOfflineDownloads() {
   }, [replaceRecords]);
 
   const ensurePhysicalDownload = useCallback(async (track: Track, ownerUserId: string) => {
+    if (activeUserIdRef.current !== ownerUserId) return;
     if (readManifest(ownerUserId).some(record => record.track.id === track.id)) return;
     if (!isOfflineTrackReferenced(readReferences(ownerUserId), track.id)) return;
 
     const jobKey = downloadJobKey(ownerUserId, track.id);
     await offlineDownloadScheduler.enqueue(jobKey, async () => {
+      if (activeUserIdRef.current !== ownerUserId) return;
       if (readManifest(ownerUserId).some(record => record.track.id === track.id)) return;
       if (!isOfflineTrackReferenced(readReferences(ownerUserId), track.id)) return;
       const url = streamUrl(track.id);
