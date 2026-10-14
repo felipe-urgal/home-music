@@ -122,12 +122,12 @@ test('OpenSubsonic explicita contrato JSON-only para f=json, ausente e formatos 
   }
 });
 
-test('OpenSubsonic não anuncia endpoints de descoberta ainda não implementados', async () => {
+test('OpenSubsonic rejeita endpoints de descoberta ainda não implementados', async () => {
   const app = createServer();
   await app.ready();
 
   try {
-    for (const endpoint of ['getRandomSongs', 'getGenres', 'getSongsByGenre', 'getNowPlaying']) {
+    for (const endpoint of ['getGenres', 'getSongsByGenre', 'getNowPlaying']) {
       const response = await app.inject({
         method: 'GET',
         url: `/rest/${endpoint}.view?apiKey=key-a&v=1.16.1&c=contract-tests&f=json`
