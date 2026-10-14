@@ -104,7 +104,7 @@ test('OpenSubsonic explicita contrato JSON-only para f=json, ausente e formatos 
         url: `/rest/ping.view?apiKey=key-a&v=1.16.1&c=contract-tests${suffix}`
       });
       assert.equal(response.statusCode, 200);
-      assert.match(response.headers['content-type'] as string, /^application\\/json/);
+      assert.ok((response.headers['content-type'] as string).startsWith('application/json'));
       assert.equal(response.json()['subsonic-response'].status, 'ok');
     }
 
