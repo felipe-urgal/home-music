@@ -153,4 +153,59 @@ describe('offline cold start', () => {
 
     expect(result).toBeNull();
   });
+  it('não exibe bytes de outra conta mesmo com IDs de faixa idênticos', async () => {
+    const opened: string[] = [];
+    const cacheStorage = {
+      async open(name: string) {
+        opened.push(name);
+        return {
+          async keys() {
+            return name.endsWith('user-a')
+              ? [new Request('http://localhost/api/tracks/shared/stream')]
+              : [];
+          }
+        };
+      }
+    } as unknown as CacheStorage;
+
+    const a = await readOfflineColdStartRecords([record('shared')], {
+      userId: 'user-a', cacheStorage
+    });
+    const b = await readOfflineColdStartRecords([record('shared')], {
+      userId: 'user-b', cacheStorage
+    });
+
+    expect(a?.map(item => item.track.id)).toEqual(['shared']);
+    expect(b).toEqual([]);
+    expect(opened).toEqual([
+      'home-music-offline-audio-v2-user-a',
+      'home-music-offline-audio-v2-user-b'
+    ]);
+  });
+
+  it('recupera a reconciliação após falha temporária sem perder o snapshot', async () => {
+    let unavailable = true;
+    const cacheStorage = {
+      async open() {
+        if (unavailable) throw new Error('backend e storage temporariamente indisponíveis');
+        return {
+          async keys() {
+            return [new Request('http://localhost/api/tracks/a/stream')];
+          }
+        };
+      }
+    } as unknown as CacheStorage;
+    const snapshot = [record('a'), record('b')];
+
+    expect(await readOfflineColdStartRecords(snapshot, { userId: 'user-a', cacheStorage })).toBeNull();
+    expect(snapshot).toHaveLength(2);
+
+    unavailable = false;
+    const recovered = await readOfflineColdStartRecords(snapshot, {
+      userId: 'user-a', cacheStorage
+    });
+    expect(recovered?.map(item => item.track.id)).toEqual(['a']);
+    expect(reconcileOfflineColdStartCollections([collection(['a', 'b'])], recovered ?? [])[0]?.status).toBe('partial');
+  });
+
 });
