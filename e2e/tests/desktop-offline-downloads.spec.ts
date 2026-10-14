@@ -195,7 +195,15 @@ test('snapshot local permanece intacto enquanto autenticação online está pend
   const blocked = new Promise<void>(resolve => { release = resolve; });
   await page.route('**/api/auth/status', async route => {
     await blocked;
-    await route.continue();
+    try {
+      await route.continue();
+    } catch (error) {
+      // Reload/service-worker navigation can cancel an intercepted request.
+      // Only ignore that cancellation; other routing errors must still fail.
+      if (!(error instanceof Error && /Route is already handled|Target page, context or browser has been closed/.test(error.message))) {
+        throw error;
+      }
+    }
   });
   try {
     await page.reload({ waitUntil: 'domcontentloaded' });
