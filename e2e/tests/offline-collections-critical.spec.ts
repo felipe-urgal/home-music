@@ -154,6 +154,20 @@ test('playlist offline deduplica bytes, promove referência individual e coleta 
     individualTrackIds: [tracks[0]!.id, tracks[1]!.id].sort(),
     collectionCount: 0
   });
+
+  // A última referência individual deve coletar os bytes e o manifesto.
+  await page.goto('/library');
+  const finalTable = page.getByTestId('desktop-library-table');
+  await expect(finalTable).toBeVisible();
+  for (const track of tracks.slice(0, 2)) {
+    page.once('dialog', dialog => void dialog.accept());
+    await finalTable.getByRole('button', { name: `Remover download offline de ${track.title}` }).click();
+    await expect(finalTable.getByRole('button', { name: `Baixar ${track.title} para uso offline` })).toBeVisible();
+  }
+  await expect.poll(async () => {
+    const snapshot = await offlineStorageSnapshot(page);
+    return { manifest: snapshot.physicalTrackIds.length, cache: snapshot.cacheEntries };
+  }).toEqual({ manifest: 0, cache: 0 });
 });
 
 test('controle de coleção offline funciona no layout mobile', async ({ page }, testInfo) => {
