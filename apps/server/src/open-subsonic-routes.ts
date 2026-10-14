@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomInt } from 'node:crypto';
 import type { FileHandle } from 'node:fs/promises';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Playlist, Track } from '@home-music/shared';
@@ -682,6 +682,28 @@ export function registerOpenSubsonicRoutes(
         album: {
           ...albumResponse(album),
           song: album.tracks
+            .map(track => songResponse(track, catalog, options.library, favoriteIds))
+            .filter(Boolean)
+        }
+      }));
+    }
+
+    if (endpoint === 'getRandomSongs') {
+      const size = boundedInteger(one(request.query, 'size'), 10);
+      const musicFolderId = one(request.query, 'musicFolderId');
+      if (size == null) return reply.send(failure(10, 'Tamanho da lista inválido.'));
+      if (musicFolderId != null && musicFolderId !== MUSIC_FOLDER_ID) {
+        return reply.send(failure(70, 'Pasta de música não encontrada.'));
+      }
+      const songs = [...catalog.tracks];
+      const count = Math.min(size, songs.length);
+      for (let index = 0; index < count; index += 1) {
+        const chosen = randomInt(index, songs.length);
+        [songs[index], songs[chosen]] = [songs[chosen], songs[index]];
+      }
+      return reply.send(success({
+        randomSongs: {
+          song: songs.slice(0, count)
             .map(track => songResponse(track, catalog, options.library, favoriteIds))
             .filter(Boolean)
         }
