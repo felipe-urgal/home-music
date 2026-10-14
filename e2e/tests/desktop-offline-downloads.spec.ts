@@ -39,8 +39,7 @@ async function ensureServiceWorkerControl(page: Page) {
 }
 
 async function openDesktopLibrary(page: Page) {
-  const sidebar = page.getByTestId('desktop-sidebar');
-  await sidebar.getByRole('button', { name: 'Pastas', exact: true }).click();
+  await page.goto('/library');
   const table = page.getByTestId('desktop-library-table');
   await expect(table).toBeVisible();
   return table;
