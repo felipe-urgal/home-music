@@ -148,4 +148,50 @@ describe('offline collection references', () => {
     expect(parsed?.collections).toHaveLength(1);
     expect(parsed?.collections[0]?.trackIds).toEqual(['one', 'two']);
   });
+
+  it('intercala remoções de coleções sem recolher uma faixa readquirida durante operação assíncrona', async () => {
+    let references = upsertOfflineCollectionReference(createOfflineReferenceManifest(), {
+      kind: 'playlist', sourceId: 'a', name: 'A', trackIds: ['shared', 'only-a']
+    });
+    references = upsertOfflineCollectionReference(references, {
+      kind: 'playlist', sourceId: 'b', name: 'B', trackIds: ['shared']
+    });
+    const queued = removeOfflineCollectionReference(references, 'playlist', 'a');
+    // A asynchronous cache operation yields here; B continues referencing shared.
+    await Promise.resolve();
+    expect(unreferencedOfflineTrackIds(queued, ['shared', 'only-a'])).toEqual(['only-a']);
+    const withoutB = removeOfflineCollectionReference(queued, 'playlist', 'b');
+    const acquired = addIndividualOfflineReference(withoutB, 'shared');
+    expect(unreferencedOfflineTrackIds(acquired, ['shared'])).toEqual([]);
+    expect(unreferencedOfflineTrackIds(removeIndividualOfflineReference(acquired, 'shared'), ['shared']))
+      .toEqual(['shared']);
+  });
+
+  it('idempotência sob operações concorrentes preserva apenas referências ainda válidas', async () => {
+    let current = upsertOfflineCollectionReference(createOfflineReferenceManifest(['one']), {
+      kind: 'folder', sourceId: 'folder', name: 'Pasta', trackIds: ['one', 'two']
+    });
+    const operations = [
+      () => { current = removeIndividualOfflineReference(current, 'one'); },
+      () => { current = removeOfflineCollectionReference(current, 'folder', 'folder'); },
+      () => { current = removeIndividualOfflineReference(current, 'one'); }
+    ];
+    await Promise.all(operations.map(async operation => { await Promise.resolve(); operation(); }));
+    expect(current.individualTrackIds).toEqual([]);
+    expect(current.collections).toEqual([]);
+    expect(unreferencedOfflineTrackIds(current, ['one', 'two', 'one'])).toEqual(['one', 'two']);
+  });
+
+  it('não importa referências de outro usuário ao analisar manifestos ausentes ou corrompidos', () => {
+    const first = upsertOfflineCollectionReference(createOfflineReferenceManifest(), {
+      kind: 'playlist', sourceId: 'shared', name: 'Privada', trackIds: ['private']
+    });
+    const persistedFirst = JSON.stringify(first);
+    expect(parseOfflineReferenceManifest(persistedFirst)?.collections[0]?.trackIds).toEqual(['private']);
+    expect(parseOfflineReferenceManifest('{"version":1,"collections":')).toBeNull();
+    expect(parseOfflineReferenceManifest(null)).toBeNull();
+    expect(isOfflineTrackReferenced(createOfflineReferenceManifest(), 'private')).toBe(false);
+    expect(offlineReferencesKey('first')).not.toBe(offlineReferencesKey('second'));
+  });
+
 });
