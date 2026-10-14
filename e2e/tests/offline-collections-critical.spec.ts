@@ -130,7 +130,10 @@ test('playlist offline deduplica bytes, promove referência individual e coleta 
   expect(updateResponse.ok()).toBe(true);
 
   await page.reload();
-  await expect(page.getByText('conteúdo alterado', { exact: false })).toBeVisible();
+  // The desktop collection status label can be CSS-hidden; check the
+  // update action and the persisted reference rather than visual text.
+  await expect(page.getByRole('button', { name: 'Atualizar offline', exact: true })).toBeEnabled();
+  await expect.poll(async () => (await offlineStorageSnapshot(page)).collections[0]?.trackIds.length).toBe(2);
   await page.getByRole('button', { name: 'Atualizar offline', exact: true }).click();
   await expect.poll(async () => (await offlineStorageSnapshot(page)).physicalTrackIds.length).toBe(3);
 
