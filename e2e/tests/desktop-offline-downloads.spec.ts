@@ -76,11 +76,11 @@ test('downloads offline individual e em lote usam o fluxo desktop', async ({ pag
   await expect(table.getByRole('button', { name: 'Remover download offline de E2E Zulu' })).toBeVisible();
   await expect(bulkToolbar.getByRole('button', { name: 'Todas as faixas selecionadas já possuem download individual disponível' })).toBeDisabled();
 
-  page.once('dialog', async dialog => {
-    expect(dialog.message()).toContain('E2E Track');
-    await dialog.accept();
-  });
   await table.getByRole('button', { name: 'Remover download offline de E2E Track' }).click();
+  const confirmation = page.getByRole('dialog', { name: 'Remover download individual?' });
+  await expect(confirmation).toBeVisible();
+  await confirmation.getByRole('button', { name: 'Remover' }).click();
+  await expect(confirmation).not.toBeVisible();
   await expect(table.getByRole('button', { name: 'Baixar E2E Track para uso offline' })).toBeVisible();
 });
 
