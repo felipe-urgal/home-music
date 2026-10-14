@@ -91,6 +91,16 @@ export function OfflineLibraryScreen({
   const busyRef = useRef(new Set<string>());
   const removalRef = useRef(removal);
   removalRef.current = removal;
+  // Use the latest props after an awaited storage operation: external reconciliation
+  // may remove the target while the confirmation dialog is still busy.
+  const existingTargetsRef = useRef({ collections, individualTrackIds });
+  existingTargetsRef.current = { collections, individualTrackIds };
+  const targetExists = (target: NonNullable<typeof removal>) => {
+    const latest = existingTargetsRef.current;
+    return target.kind === 'track'
+      ? latest.individualTrackIds.has(target.key.slice('track:'.length))
+      : latest.collections.some(collection => collection.key === target.key.slice('collection:'.length));
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -104,14 +114,12 @@ export function OfflineLibraryScreen({
   }, [totalBytes]);
 
   useEffect(() => {
-    if (!removal || busyRef.current.has(removal.key) || removalError) return;
-    const stillExists = removal.kind === 'track'
-      ? individualTrackIds.has(removal.key.slice('track:'.length))
-      : collections.some(collection => collection.key === removal.key.slice('collection:'.length));
-    if (!stillExists) {
-      setRemoval(null);
-      setRemovalError(null);
-    }
+    if (!removal || targetExists(removal)) return;
+    // An external removal is a successful reconciliation, not a storage failure.
+    busyRef.current.delete(removal.key);
+    setBusyKeys(new Set(busyRef.current));
+    setRemoval(null);
+    setRemovalError(null);
   }, [collections, individualTrackIds, removal, removalError, busyKeys]);
 
   const confirmRemoval = async () => {
@@ -125,10 +133,7 @@ export function OfflineLibraryScreen({
       else await onRemoveCollection(target.collectionKind!, target.sourceId!);
       if (removalRef.current?.key === target.key) setRemoval(null);
     } catch (error) {
-      const stillReferenced = target.kind === 'track'
-        ? individualTrackIds.has(target.key.slice('track:'.length))
-        : collections.some(collection => collection.key === target.key.slice('collection:'.length));
-      if (removalRef.current?.key === target.key && !stillReferenced) {
+      if (removalRef.current?.key === target.key && !targetExists(target)) {
         setRemoval(null);
       } else if (removalRef.current?.key === target.key) {
         setRemovalError(error instanceof Error && error.name === 'QuotaExceededError'
