@@ -510,7 +510,12 @@ export function useOfflineDownloads() {
     if (!current.some(record => record.track.id === trackId)) {
       if (!isOfflineTrackReferenced(readReferences(ownerUserId), trackId)) {
         const cache = await caches.open(offlineAudioCacheName(ownerUserId));
-        await cache.delete(streamUrl(trackId));
+        // Another mutation may acquire the reference while Cache Storage opens.
+        if (isOfflineTrackReferenced(readReferences(ownerUserId), trackId)) return;
+        const deleted = await cache.delete(streamUrl(trackId));
+        if (!deleted && await cache.match(streamUrl(trackId))) {
+          throw new Error('Não foi possível remover o arquivo do armazenamento.');
+        }
       }
       return;
     }
@@ -527,6 +532,9 @@ export function useOfflineDownloads() {
     if (!deleted && await cache.match(streamUrl(trackId))) {
       throw new Error('Não foi possível remover o arquivo do armazenamento.');
     }
+    // If another collection has claimed this track while deletion was pending,
+    // retain its manifest entry. Its bytes can be recovered by retrying later.
+    if (isOfflineTrackReferenced(readReferences(ownerUserId), trackId)) return;
     // Another download may have completed during deletion: do not publish the
     // stale manifest snapshot and accidentally hide unrelated downloaded tracks.
     const latestRecords = readManifest(ownerUserId);
