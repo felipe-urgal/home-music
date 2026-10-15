@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { AuthenticatedApp } from './AuthenticatedApp';
 import { authenticatedSurfaceForPath } from './browser-navigation';
 import { LoginScreen } from './components/LoginScreen';
+import { RequiredPasswordChangeScreen } from './components/RequiredPasswordChangeScreen';
 import { TvDeviceApprovalScreen } from './components/TvDeviceApprovalScreen';
 import { TvDeviceLoginScreen } from './components/TvDeviceLoginScreen';
 import { TvRemoteControlSurface } from './components/TvRemoteControlSurface';
@@ -100,6 +101,18 @@ export default function App() {
   const offlineForMode = automaticOfflineMode
     ? offlineSnapshot(scopedOffline, coldStartSnapshot?.ownerUserId === scopedOffline.ownerUserId ? coldStartSnapshot.records : scopedOffline.records)
     : scopedOffline;
+
+  // A sessão com troca obrigatória de senha nunca pode entrar no modo offline.
+  if (auth.passwordChangeUser) {
+    return (
+      <RequiredPasswordChangeScreen
+        username={auth.passwordChangeUser.username}
+        error={auth.error}
+        onChangePassword={auth.changePassword}
+        onLogout={auth.logout}
+      />
+    );
+  }
 
   if (showOfflineMode) {
     return (

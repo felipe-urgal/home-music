@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import {
   Eye,
   EyeOff,
@@ -13,7 +13,7 @@ type LoginScreenProps = {
   configured: boolean;
   error: string | null;
   unreachable: boolean;
-  onLogin: (username: string, password: string) => Promise<void>;
+  onLogin: (username: string, password: string) => Promise<{ passwordChangeRequired: boolean }>;
   onRetry: () => void;
   secondaryActionLabel?: string;
   onSecondaryAction?: () => void;
@@ -33,25 +33,28 @@ export function LoginScreen({
   const [showPassword, setShowPassword] = useState(false);
   const [savePassword, setSavePassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [formError, setFormError] = useState<string | null>(null);
   const canSavePassword = canStorePasswordCredential();
   const displayedError = formError || error;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!username.trim() || !password) return;
+    if (submittingRef.current || !username.trim() || !password) return;
+    submittingRef.current = true;
 
     const normalizedUsername = username.trim();
     setSubmitting(true);
     setFormError(null);
     try {
-      await onLogin(normalizedUsername, password);
-      if (savePassword && canSavePassword) {
+      const result = await onLogin(normalizedUsername, password);
+      if (!result.passwordChangeRequired && savePassword && canSavePassword) {
         await storePasswordCredential(normalizedUsername, password);
       }
     } catch (error) {
       setFormError(error instanceof Error ? error.message : 'Não foi possível entrar.');
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   }
