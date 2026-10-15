@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { ChevronDown, ChevronUp, LocateFixed, Music2 } from 'lucide-react';
 import type { LyricsResponse, Track } from '@home-music/shared';
-import { useTrackLyrics } from '../useTrackLyrics';
+import { useTrackLyrics, useTrackLyricsState } from '../useTrackLyrics';
 
 type LyricsPanelProps = {
   track: Track;
@@ -133,14 +133,14 @@ export function useLyricsAutoFollow<T extends HTMLElement>(
 
 export function LyricsPanel({ track, currentTime, offlineMode }: LyricsPanelProps) {
   const [open, setOpen] = useState(false);
-  const lyrics = useTrackLyrics(track, offlineMode);
+  const { lyrics, status, retry } = useTrackLyricsState(track, offlineMode);
   const follow = useLyricsAutoFollow<HTMLDivElement>(lyrics, currentTime, open, track.id);
 
   useEffect(() => {
     setOpen(false);
   }, [track.id]);
 
-  if (!lyrics) return null;
+  if (status === 'missing' || status === 'idle') return null;
 
   return (
     <section className="lyrics-panel">
@@ -154,7 +154,16 @@ export function LyricsPanel({ track, currentTime, offlineMode }: LyricsPanelProp
         {open ? <ChevronUp /> : <ChevronDown />}
       </button>
 
-      {open && (
+      {open && status === 'error' && (
+        <div className="lyrics-panel__content" role="alert">
+          <p>Não foi possível carregar a letra.</p>
+          <button type="button" onClick={retry}>Tentar novamente</button>
+        </div>
+      )}
+      {open && status === 'loading' && (
+        <div className="lyrics-panel__content" role="status">Carregando letra…</div>
+      )}
+      {open && lyrics && (
         <div
           ref={follow.scrollContainerRef}
           className="lyrics-panel__content"
