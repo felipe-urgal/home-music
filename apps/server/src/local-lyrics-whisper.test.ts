@@ -154,6 +154,26 @@ describe('LocalLyricsWhisperService', () => {
     }
   });
 
+  it('filters a large library before doing bounded sidecar reads', async () => {
+    const context = await fixture(null);
+    try {
+      const library = (context.service as unknown as {
+        options: { library: { listTracks: () => Track[]; readEffectiveLyrics: (id: string) => Promise<LyricsResponse | null> } }
+      }).options.library;
+      let reads = 0;
+      library.listTracks = () => [
+        ...Array.from({ length: 10_000 }, (_, index) => ({ ...TRACK, id: `ignored-${index}`, title: 'Outra faixa' })),
+        ...Array.from({ length: 40 }, (_, index) => ({ ...TRACK, id: `match-${index}`, title: 'Needle' }))
+      ];
+      library.readEffectiveLyrics = async () => { reads += 1; return null; };
+      const eligible = await context.service.eligibleTracks('needle', 7);
+      assert.equal(eligible.tracks.length, 7);
+      assert.ok(reads <= 8, `expected no more than eight sidecar reads, got ${reads}`);
+    } finally {
+      await context.close();
+    }
+  });
+
   it('reuses an active equivalent Whisper job', async () => {
     const context = await fixture(null);
     try {
