@@ -32,7 +32,7 @@ describe('offline bootstrap contract', () => {
   it('mantém resposta real do servidor como autoridade de autenticação', () => {
     const auth = source('useAuth.ts');
 
-    expect(auth).toMatch(/const response = await fetchAuthStatusResponse\(\);\s+reachedServer = true;/);
+    expect(auth).toMatch(/fetchAuthStatusResponse\(\{ signal: request.signal \}\)/);
     expect(auth).toMatch(/if \(!response\.ok\) throw new Error/);
     expect(auth).toMatch(/if \(reachedServer\) forgetOfflineUserId\(\);/);
     expect(auth).toMatch(/const offline = !reachedServer;/);
