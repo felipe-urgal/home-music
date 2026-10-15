@@ -179,8 +179,8 @@ export function useAuth() {
         throw new Error(await messageFromResponse(response));
       }
       requests.current.invalidate();
-      forgetOfflineUserId();
       if (mounted.current) clearSession();
+      else forgetOfflineUserId();
     } catch (caught) {
       const reason = caught instanceof Error ? caught : new Error('Não foi possível sair.');
       if (mounted.current) setError(reason.message);
@@ -210,8 +210,8 @@ export function useAuth() {
       if (!response.ok) throw new Error(await messageFromResponse(response));
       // The server revokes all sessions and expires this cookie on success.
       requests.current.invalidate();
-      forgetOfflineUserId();
       if (mounted.current) clearSession();
+      else forgetOfflineUserId();
     } finally {
       mutation.current = null;
     }
