@@ -91,9 +91,14 @@ export async function prepareOfflineLyricsSnapshot(
   userId: string
 ): Promise<PreparedOfflineLyricsSnapshot | null> {
   try {
+    const previousRevision = readSnapshots(userId)[trackId]?.revision;
     const response = await apiFetch(`/api/tracks/${encodeURIComponent(trackId)}/lyrics`, {
-      cache: 'no-store'
+      cache: 'no-store',
+      headers: previousRevision?.startsWith('"lyrics-')
+        ? { 'If-None-Match': previousRevision }
+        : undefined
     });
+    if (response.status === 304) return null;
     if (!response.ok) return null;
     const lyrics = await response.json() as LyricsResponse | null;
     if (lyrics !== null && !isLyricsResponse(lyrics)) return null;
@@ -101,7 +106,7 @@ export async function prepareOfflineLyricsSnapshot(
       userId,
       trackId,
       snapshot: {
-        revision: contentRevision(lyrics),
+        revision: response.headers.get('ETag') ?? contentRevision(lyrics),
         lyrics,
         preparedAt: new Date().toISOString()
       }
@@ -118,6 +123,7 @@ export function commitOfflineLyricsSnapshot(
 ) {
   try {
     const current = readSnapshots(prepared.userId, storage);
+    if (current[prepared.trackId]?.revision === prepared.snapshot.revision) return true;
     writeSnapshots(prepared.userId, { ...current, [prepared.trackId]: prepared.snapshot }, storage);
     return true;
   } catch {
