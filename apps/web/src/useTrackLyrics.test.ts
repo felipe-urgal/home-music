@@ -36,6 +36,25 @@ describe('loadTrackLyrics', () => {
     expect(second).toEqual(lyrics);
   });
 
+  it('preserva erro HTTP e permite tentar novamente', async () => {
+    vi.mocked(apiFetch)
+      .mockResolvedValueOnce(new Response(null, { status: 503 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(lyrics), { status: 200 }));
+
+    await expect(loadTrackLyrics('track-error')).rejects.toThrow('HTTP 503');
+    await expect(loadTrackLyrics('track-error')).resolves.toEqual(lyrics);
+    expect(apiFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('trata ausência legítima como null, sem esconder falhas de rede', async () => {
+    vi.mocked(apiFetch)
+      .mockResolvedValueOnce(new Response('null', { status: 200 }))
+      .mockRejectedValueOnce(new TypeError('network unavailable'));
+
+    await expect(loadTrackLyrics('track-missing')).resolves.toBeNull();
+    await expect(loadTrackLyrics('track-network')).rejects.toThrow('network unavailable');
+  });
+
   it('não mantém cache permanente depois que a request termina', async () => {
     vi.mocked(apiFetch)
       .mockResolvedValueOnce(new Response(JSON.stringify(lyrics), { status: 200 }))
