@@ -174,6 +174,23 @@ describe('LocalLyricsWhisperService', () => {
     }
   });
 
+  it('cancels active work and waits for shutdown before closing resources', async () => {
+    const context = await fixture(null);
+    try {
+      const started = await context.service.startJob({ trackId: TRACK.id, mode: 'transcribe' }, 'admin-1');
+      const cancelled = context.service.cancelJob(started.id);
+      assert.equal(cancelled?.status, 'cancelled');
+      await context.service.close();
+      assert.equal(context.service.getJob(started.id)?.status, 'cancelled');
+      await assert.rejects(
+        context.service.startJob({ trackId: TRACK.id, mode: 'transcribe' }, 'admin-1'),
+        /encerrado/
+      );
+    } finally {
+      await context.close();
+    }
+  });
+
   it('reuses an active equivalent Whisper job', async () => {
     const context = await fixture(null);
     try {
