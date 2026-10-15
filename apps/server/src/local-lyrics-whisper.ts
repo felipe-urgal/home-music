@@ -500,6 +500,13 @@ export class LocalLyricsWhisperService {
       error.statusCode = 409;
       throw error;
     }
+    const existing = [...this.jobs.values()].find(job =>
+      job.trackId === track.id
+      && job.mode === request.mode
+      && job.ownerId === (ownerId?.trim() || 'admin')
+      && this.running.has(job.id)
+    );
+    if (existing) return cloneJob(existing);
     const baseLyrics = await this.options.library.readEffectiveLyrics(track.id);
     const expectedAction = actionForLyrics(baseLyrics);
     if (expectedAction !== request.mode) {
@@ -509,6 +516,15 @@ export class LocalLyricsWhisperService {
       error.statusCode = 409;
       throw error;
     }
+
+    // Outra chamada pode ter iniciado o job durante a leitura assíncrona de lyrics.
+    const concurrent = [...this.jobs.values()].find(job =>
+      job.trackId === track.id
+      && job.mode === request.mode
+      && job.ownerId === (ownerId?.trim() || 'admin')
+      && this.running.has(job.id)
+    );
+    if (concurrent) return cloneJob(concurrent);
 
     const id = `localjob:${randomUUID()}`;
     const createdAt = this.now().toISOString();
