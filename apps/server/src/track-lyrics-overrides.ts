@@ -217,7 +217,7 @@ export class TrackLyricsOverrideStore {
           optionalText(previous.provider),
           optionalText(previous.external_id),
           optionalText(previous.language),
-          requiredText(previous.updated_at),
+          new Date().toISOString(),
           trackId
         );
       } else {

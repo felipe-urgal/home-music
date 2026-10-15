@@ -167,6 +167,35 @@ describe('LRCLIB lyrics analyzer', () => {
     assert.equal(resolved, null);
   });
 
+  it('enforces provider rate limiting and bounded payloads without network access', async () => {
+    await assert.rejects(
+      resolveLrclibLyricsCandidate(gateway(), 'lrclib:990', {
+        fetchImpl: async () => jsonResponse({ error: 'slow down' }, 429, { 'Retry-After': '2' })
+      }),
+      error => error instanceof Error
+    );
+    await assert.rejects(
+      resolveLrclibLyricsCandidate(gateway(), 'lrclib:991', {
+        fetchImpl: async () => jsonResponse({ id: 991, plainLyrics: 'x'.repeat(600 * 1024) })
+      }),
+      error => error instanceof Error
+    );
+  });
+
+  it('propagates a cancelled request rather than accepting provider data', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await assert.rejects(
+      resolveLrclibLyricsCandidate(gateway(), 'lrclib:992', {
+        signal: controller.signal,
+        fetchImpl: async (_url, init) => {
+          if (init?.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+          return jsonResponse(null);
+        }
+      })
+    );
+  });
+
   it('rejects malformed and oversized provider payloads without retaining commercial fixtures', () => {
     assert.throws(() => normalizeLrclibSearch({ recordings: [] }));
     assert.throws(() => normalizeLrclibRecord({

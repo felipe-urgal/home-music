@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
@@ -66,6 +66,32 @@ describe('lyrics', () => {
       synchronized: true,
       lines: [{ time: 2, text: 'Sidecar' }]
     });
+  });
+
+  it('prefers LRC to TXT and observes sidecar edits and removal', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'home-music-lyrics-priority-'));
+    const track = path.join(root, 'song.mp3');
+    await writeFile(track, 'audio');
+    await writeFile(path.join(root, 'song.txt'), 'Texto');
+    await writeFile(path.join(root, 'song.lrc'), '[00:01.00]Versão A');
+    assert.equal((await readTrackLyrics(root, track))?.lines[0]?.text, 'Versão A');
+    await writeFile(path.join(root, 'song.lrc'), '[00:02.00]Versão B');
+    assert.equal((await readTrackLyrics(root, track))?.lines[0]?.text, 'Versão B');
+    await rm(path.join(root, 'song.lrc'));
+    assert.equal((await readTrackLyrics(root, track))?.source, 'txt');
+    await rm(path.join(root, 'song.txt'));
+    assert.equal(await readTrackLyrics(root, track), null);
+  });
+
+  it('ignores oversized and invalid UTF-8 LRC files and safely falls back to TXT', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'home-music-lyrics-invalid-'));
+    const track = path.join(root, 'song.mp3');
+    await writeFile(track, 'audio');
+    await writeFile(path.join(root, 'song.txt'), 'Fallback');
+    await writeFile(path.join(root, 'song.lrc'), Buffer.alloc(512 * 1024 + 1));
+    assert.equal((await readTrackLyrics(root, track))?.source, 'txt');
+    await writeFile(path.join(root, 'song.lrc'), Buffer.from([0xc3, 0x28]));
+    assert.equal((await readTrackLyrics(root, track))?.lines[0]?.text, 'Fallback');
   });
 
   it('ignores a sidecar symlink that escapes the library', async () => {

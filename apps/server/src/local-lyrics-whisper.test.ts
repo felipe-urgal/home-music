@@ -154,6 +154,58 @@ describe('LocalLyricsWhisperService', () => {
     }
   });
 
+  it('filters a large library before doing bounded sidecar reads', async () => {
+    const context = await fixture(null);
+    try {
+      const library = (context.service as unknown as {
+        options: { library: { listTracks: () => Track[]; readEffectiveLyrics: (id: string) => Promise<LyricsResponse | null> } }
+      }).options.library;
+      let reads = 0;
+      library.listTracks = () => [
+        ...Array.from({ length: 10_000 }, (_, index) => ({ ...TRACK, id: `ignored-${index}`, title: 'Outra faixa' })),
+        ...Array.from({ length: 40 }, (_, index) => ({ ...TRACK, id: `match-${index}`, title: 'Needle' }))
+      ];
+      library.readEffectiveLyrics = async () => { reads += 1; return null; };
+      const eligible = await context.service.eligibleTracks('needle', 7);
+      assert.equal(eligible.tracks.length, 7);
+      assert.ok(reads <= 8, `expected no more than eight sidecar reads, got ${reads}`);
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('cancels active work and waits for shutdown before closing resources', async () => {
+    const context = await fixture(null);
+    try {
+      const started = await context.service.startJob({ trackId: TRACK.id, mode: 'transcribe' }, 'admin-1');
+      const cancelled = context.service.cancelJob(started.id);
+      assert.equal(cancelled?.status, 'cancelled');
+      await context.service.close();
+      assert.equal(context.service.getJob(started.id)?.status, 'cancelled');
+      await assert.rejects(
+        context.service.startJob({ trackId: TRACK.id, mode: 'transcribe' }, 'admin-1'),
+        /encerrado/
+      );
+    } finally {
+      await context.close();
+    }
+  });
+
+  it('reuses an active equivalent Whisper job', async () => {
+    const context = await fixture(null);
+    try {
+      const [first, second] = await Promise.all([
+        context.service.startJob({ trackId: TRACK.id, mode: 'transcribe' }, 'admin-1'),
+        context.service.startJob({ trackId: TRACK.id, mode: 'transcribe' }, 'admin-1')
+      ]);
+      assert.equal(second.id, first.id);
+      const job = await waitForJob(context.service, first.id);
+      assert.equal(job.status, 'review');
+    } finally {
+      await context.close();
+    }
+  });
+
   it('aligns reliable plain lyrics and keeps the original words in the review candidate', async () => {
     const plain: LyricsResponse = {
       source: 'txt',

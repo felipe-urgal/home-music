@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import type { NormalizationMode } from '@home-music/shared';
 import type { LibraryService } from './library-service.js';
@@ -39,7 +40,11 @@ export function registerMediaRoutes(
     }
 
     const lyrics = await media.lyrics(request.params.id);
-    reply.header('Cache-Control', 'no-store');
+    // A revisão reflete a letra efetiva (override ou sidecar), não o áudio.
+    const revision = `"lyrics-${createHash('sha256').update(JSON.stringify(lyrics)).digest('hex')}"`;
+    reply.header('Cache-Control', 'private, no-cache');
+    reply.header('ETag', revision);
+    if (request.headers['if-none-match'] === revision) return reply.code(304).send();
     return reply.send(lyrics);
   });
 
