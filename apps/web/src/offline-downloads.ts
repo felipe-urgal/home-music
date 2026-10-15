@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Track } from '@home-music/shared';
 import { fetchOfflineTrackResponse } from './offline-background-fetch';
+import { commitOfflineLyricsSnapshot, prepareOfflineLyricsSnapshot } from './offline-lyrics-cache';
 import { apiFetch } from './api-client';
 import {
   addIndividualOfflineReference,
@@ -551,7 +552,15 @@ export function useOfflineDownloads() {
 
   const ensurePhysicalDownload = useCallback(async (track: Track, ownerUserId: string) => {
     if (activeUserIdRef.current !== ownerUserId) return;
-    if (readManifest(ownerUserId).some(record => record.track.id === track.id)) return;
+    if (readManifest(ownerUserId).some(record => record.track.id === track.id)) {
+      // A presença do áudio não implica que a letra offline esteja atualizada.
+      const prepared = await prepareOfflineLyricsSnapshot(track.id, ownerUserId);
+      if (prepared && activeUserIdRef.current === ownerUserId
+        && isOfflineTrackReferenced(readReferences(ownerUserId), track.id)) {
+        commitOfflineLyricsSnapshot(prepared);
+      }
+      return;
+    }
     if (!isOfflineTrackReferenced(readReferences(ownerUserId), track.id)) return;
 
     const jobKey = downloadJobKey(ownerUserId, track.id);
