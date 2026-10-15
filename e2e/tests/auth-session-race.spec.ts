@@ -76,10 +76,10 @@ test('falha HTTP no logout mantém a sessão e permite tentar novamente', async 
       body: JSON.stringify({ error: 'Serviço temporariamente indisponível.' })
     });
   });
-  await page.getByRole('button', { name: 'Sair da conta', exact: true }).first().click();
+  await page.getByRole('button', { name: /Sair da conta/ }).first().click();
   await expect(page.getByText('Serviço temporariamente indisponível.')).toBeVisible();
   await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
-  await expect(page.getByRole('button', { name: 'Sair da conta', exact: true }).first()).toBeEnabled();
+  await expect(page.getByRole('button', { name: /Sair da conta/ }).first()).toBeEnabled();
 });
 
 test('logout ignora 401 tardio de outra requisição e não restaura sessão', async ({ page }) => {
@@ -95,7 +95,7 @@ test('logout ignora 401 tardio de outra requisição e não restaura sessão', a
     await route.continue();
   });
 
-  await page.getByRole('button', { name: 'Sair da conta', exact: true }).first().click();
+  await page.getByRole('button', { name: /Sair da conta/ }).first().click();
   await started;
   await page.evaluate(() => window.dispatchEvent(new Event('home-music:auth-required')));
   releaseLogout();
