@@ -19,7 +19,8 @@ export function loadTrackLyrics(trackId: string) {
 
   let request: Promise<LyricsResponse | null>;
   request = apiFetch(`/api/tracks/${encodeURIComponent(trackId)}/lyrics`, {
-    cache: 'no-store'
+    cache: 'no-store',
+    signal: AbortSignal.timeout(15_000)
   })
     .then(async response => {
       if (!response.ok) throw new Error(`Não foi possível carregar a letra (HTTP ${response.status}).`);
