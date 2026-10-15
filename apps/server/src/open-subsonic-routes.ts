@@ -1,29 +1,42 @@
-import { createHash, randomInt } from 'node:crypto';
-import type { FileHandle } from 'node:fs/promises';
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import type { Playlist, Track } from '@home-music/shared';
-import type { IndexedTrack } from './library.js';
-import type { LibraryService } from './library-service.js';
-import type { OpenSubsonicAuthenticatedKey, OpenSubsonicCredentialStore } from './open-subsonic-credentials.js';
+import { randomInt } from 'node:crypto';
+import type { FastifyInstance } from 'fastify';
+import type { Track } from '@home-music/shared';
+import type { OpenSubsonicAuthenticatedKey } from './open-subsonic-credentials.js';
 import type { PersonalLibraryService } from './personal-library-service.js';
-import { parseByteRange } from './security.js';
-import type { TrackMediaInfrastructure } from './track-media-infrastructure.js';
-import type { TranscodeQuality } from './transcoding.js';
+import {
+  authenticatedRequest,
+  OpenSubsonicRateLimiter,
+  type OpenSubsonicCredentials
+} from './open-subsonic-auth.js';
+import {
+  albumResponse,
+  artistResponse,
+  buildCatalog,
+  indexesFromArtists,
+  lazyObject,
+  lazyReadonlySet,
+  playlistResponse,
+  songResponse,
+  type OpenSubsonicLibrary
+} from './open-subsonic-catalog.js';
+import {
+  booleanParameter,
+  boundedInteger,
+  cleanText,
+  DEFAULT_LIST_COUNT,
+  failure,
+  has,
+  many,
+  normalizeEndpoint,
+  one,
+  success,
+  type Query
+} from './open-subsonic-http.js';
+import { handleStream, type OpenSubsonicMedia } from './open-subsonic-stream.js';
 
-const PROTOCOL_VERSION = '1.16.1';
-const SERVER_TYPE = 'Home Music';
-const SERVER_VERSION = '0.1.0';
+export { MAX_OPEN_SUBSONIC_RATE_LIMIT_SUBJECTS, OpenSubsonicRateLimiter } from './open-subsonic-auth.js';
+
 const MUSIC_FOLDER_ID = '1';
-const DEFAULT_LIST_COUNT = 20;
-const MAX_LIST_COUNT = 500;
-const VALID_KEY_REQUESTS_PER_MINUTE = 600;
-const INVALID_AUTH_ATTEMPTS_PER_MINUTE = 30;
-export const MAX_OPEN_SUBSONIC_RATE_LIMIT_SUBJECTS = 4_096;
-
-type QueryValue = string | string[] | undefined;
-type Query = Record<string, QueryValue>;
-
-type OpenSubsonicLibrary = Pick<LibraryService, 'listPublicTracks' | 'getTrack'>;
 type OpenSubsonicPersonal = Pick<
   PersonalLibraryService,
   | 'getFavoriteIds'
@@ -35,509 +48,13 @@ type OpenSubsonicPersonal = Pick<
   | 'setPlaylistTracks'
   | 'recordHistory'
 >;
-type OpenSubsonicMedia = Pick<
-  TrackMediaInfrastructure,
-  'openTrack' | 'cover' | 'lyrics' | 'prepareTranscode' | 'ffmpegAvailable'
->;
-type OpenSubsonicCredentials = Pick<OpenSubsonicCredentialStore, 'authenticate'>;
-
-type OpenSubsonicRouteOptions = {
+export type OpenSubsonicRouteOptions = {
   library: OpenSubsonicLibrary;
   personal: OpenSubsonicPersonal;
   media: OpenSubsonicMedia;
   credentials: OpenSubsonicCredentials;
 };
 
-type CatalogAlbum = {
-  id: string;
-  name: string;
-  artistId: string;
-  artist: string;
-  created: string;
-  tracks: Track[];
-};
-
-type CatalogArtist = {
-  id: string;
-  name: string;
-  albums: CatalogAlbum[];
-};
-
-type Catalog = {
-  tracks: Track[];
-  artists: CatalogArtist[];
-  albums: CatalogAlbum[];
-  artistById: Map<string, CatalogArtist>;
-  albumById: Map<string, CatalogAlbum>;
-  albumByTrackId: Map<string, CatalogAlbum>;
-};
-
-type RateEntry = { windowStartedAt: number; count: number };
-
-export class OpenSubsonicRateLimiter {
-  private readonly entries = new Map<string, RateEntry>();
-
-  hit(subject: string, limit: number, now = Date.now()) {
-    const current = this.entries.get(subject);
-    if (current) {
-      if (now - current.windowStartedAt >= 60_000) {
-        this.entries.set(subject, { windowStartedAt: now, count: 1 });
-        return true;
-      }
-      current.count += 1;
-      return current.count <= limit;
-    }
-
-    if (this.entries.size >= MAX_OPEN_SUBSONIC_RATE_LIMIT_SUBJECTS) {
-      this.cleanup(now);
-      if (this.entries.size >= MAX_OPEN_SUBSONIC_RATE_LIMIT_SUBJECTS) return false;
-    }
-
-    this.entries.set(subject, { windowStartedAt: now, count: 1 });
-    return true;
-  }
-
-  private cleanup(now: number) {
-    for (const [key, entry] of this.entries) {
-      if (now - entry.windowStartedAt >= 120_000) this.entries.delete(key);
-    }
-  }
-}
-
-function responseBase() {
-  return {
-    version: PROTOCOL_VERSION,
-    type: SERVER_TYPE,
-    serverVersion: SERVER_VERSION,
-    openSubsonic: true
-  } as const;
-}
-
-function success(payload: Record<string, unknown> = {}) {
-  return {
-    'subsonic-response': {
-      status: 'ok',
-      ...responseBase(),
-      ...payload
-    }
-  };
-}
-
-function failure(code: number, message: string) {
-  return {
-    'subsonic-response': {
-      status: 'failed',
-      ...responseBase(),
-      error: { code, message }
-    }
-  };
-}
-
-function one(query: Query, key: string) {
-  const value = query[key];
-  return typeof value === 'string' ? value : null;
-}
-
-function many(query: Query, key: string) {
-  const value = query[key];
-  if (typeof value === 'string') return [value];
-  return Array.isArray(value) ? value.filter(item => typeof item === 'string') : [];
-}
-
-function has(query: Query, key: string) {
-  return query[key] !== undefined;
-}
-
-function cleanText(value: string | null, maxLength = 500) {
-  if (value == null) return null;
-  const clean = value
-    .normalize('NFKC')
-    .replace(/[\u0000-\u001f\u007f]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return clean ? clean.slice(0, maxLength) : null;
-}
-
-function boundedInteger(value: string | null, fallback: number, maximum = MAX_LIST_COUNT) {
-  if (value == null || value === '') return fallback;
-  if (!/^\d+$/.test(value)) return null;
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed >= 0 && parsed <= maximum ? parsed : null;
-}
-
-function booleanParameter(value: string | null, fallback: boolean) {
-  if (value == null || value === '') return fallback;
-  if (value === 'true' || value === '1') return true;
-  if (value === 'false' || value === '0') return false;
-  return null;
-}
-
-function stableId(prefix: 'artist' | 'album', ...parts: string[]) {
-  const digest = createHash('sha256')
-    .update(parts.join('\u0000'))
-    .digest('hex')
-    .slice(0, 24);
-  return `${prefix === 'artist' ? 'ar' : 'al'}-${digest}`;
-}
-
-function safeIsoTimestamp(value: number | undefined) {
-  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return '1970-01-01T00:00:00.000Z';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '1970-01-01T00:00:00.000Z' : date.toISOString();
-}
-
-function artistName(track: Track) {
-  return cleanText(track.albumArtist, 300) ?? cleanText(track.artist, 300) ?? 'Artista desconhecido';
-}
-
-function albumName(track: Track) {
-  return cleanText(track.album, 300) ?? 'Álbum desconhecido';
-}
-
-function buildCatalog(tracks: Track[], library: OpenSubsonicLibrary): Catalog {
-  const artistsByName = new Map<string, { id: string; name: string; albumsByName: Map<string, CatalogAlbum> }>();
-  const albumByTrackId = new Map<string, CatalogAlbum>();
-
-  for (const track of tracks) {
-    const artist = artistName(track);
-    const album = albumName(track);
-    const artistKey = artist.toLocaleLowerCase('pt-BR');
-    let artistRecord = artistsByName.get(artistKey);
-    if (!artistRecord) {
-      artistRecord = {
-        id: stableId('artist', artistKey),
-        name: artist,
-        albumsByName: new Map()
-      };
-      artistsByName.set(artistKey, artistRecord);
-    }
-
-    const albumKey = album.toLocaleLowerCase('pt-BR');
-    const trackCreated = safeIsoTimestamp(library.getTrack(track.id)?.mtimeMs);
-    let albumRecord = artistRecord.albumsByName.get(albumKey);
-    if (!albumRecord) {
-      albumRecord = {
-        id: stableId('album', artistRecord.id, albumKey),
-        name: album,
-        artistId: artistRecord.id,
-        artist: artistRecord.name,
-        created: trackCreated,
-        tracks: []
-      };
-      artistRecord.albumsByName.set(albumKey, albumRecord);
-    } else if (trackCreated < albumRecord.created) {
-      albumRecord.created = trackCreated;
-    }
-    albumRecord.tracks.push(track);
-    albumByTrackId.set(track.id, albumRecord);
-  }
-
-  const artists = [...artistsByName.values()]
-    .map(record => ({
-      id: record.id,
-      name: record.name,
-      albums: [...record.albumsByName.values()]
-        .map(album => ({
-          ...album,
-          tracks: [...album.tracks].sort((left, right) => left.title.localeCompare(right.title, 'pt-BR'))
-        }))
-        .sort((left, right) => left.name.localeCompare(right.name, 'pt-BR'))
-    }))
-    .sort((left, right) => left.name.localeCompare(right.name, 'pt-BR'));
-  const albums = artists.flatMap(artist => artist.albums);
-
-  return {
-    tracks,
-    artists,
-    albums,
-    artistById: new Map(artists.map(artist => [artist.id, artist])),
-    albumById: new Map(albums.map(album => [album.id, album])),
-    albumByTrackId
-  };
-}
-
-function lazyObject<T extends object>(factory: () => T): T {
-  let value: T | null = null;
-  return new Proxy({} as T, {
-    get(_target, property) {
-      value ??= factory();
-      return Reflect.get(value, property, value);
-    }
-  });
-}
-
-function lazyReadonlySet<T>(factory: () => ReadonlySet<T>): ReadonlySet<T> {
-  let value: ReadonlySet<T> | null = null;
-  return new Proxy(new Set<T>(), {
-    get(_target, property) {
-      value ??= factory();
-      const member = Reflect.get(value, property, value);
-      return typeof member === 'function' ? member.bind(value) : member;
-    }
-  });
-}
-
-function coverTrackId(tracks: readonly Track[]) {
-  return tracks.find(track => track.hasCover)?.id ?? null;
-}
-
-function coverArtId(tracks: readonly Track[]) {
-  const trackId = coverTrackId(tracks);
-  return trackId ? `track:${trackId}` : undefined;
-}
-
-function albumDuration(album: CatalogAlbum) {
-  return Math.max(0, Math.round(album.tracks.reduce((total, track) => total + (track.duration ?? 0), 0)));
-}
-
-function artistResponse(artist: CatalogArtist) {
-  const coverArt = coverArtId(artist.albums.flatMap(album => album.tracks));
-  return {
-    id: artist.id,
-    name: artist.name,
-    ...(coverArt ? { coverArt } : {}),
-    albumCount: artist.albums.length
-  };
-}
-
-function albumResponse(album: CatalogAlbum) {
-  const coverArt = coverArtId(album.tracks) ?? '';
-  return {
-    id: album.id,
-    parent: album.artistId,
-    album: album.name,
-    title: album.name,
-    name: album.name,
-    isDir: true,
-    isVideo: false,
-    artist: album.artist,
-    artistId: album.artistId,
-    artists: [{ id: album.artistId, name: album.artist }],
-    coverArt,
-    songCount: album.tracks.length,
-    duration: albumDuration(album),
-    created: album.created
-  };
-}
-
-function songResponse(
-  track: Track,
-  catalog: Catalog,
-  library: OpenSubsonicLibrary,
-  favoriteIds?: ReadonlySet<string>
-) {
-  const album = catalog.albumByTrackId.get(track.id);
-  const internal = library.getTrack(track.id);
-  if (!album || !internal) return null;
-  const coverArt = track.hasCover ? `track:${track.id}` : coverArtId(album.tracks);
-  const displayArtist = track.artist || album.artist;
-  const artist = { id: album.artistId, name: displayArtist };
-  const albumArtist = { id: album.artistId, name: album.artist };
-  return {
-    id: track.id,
-    parent: album.id,
-    isDir: false,
-    title: track.title,
-    album: album.name,
-    artist: displayArtist,
-    artists: [artist],
-    albumArtists: [albumArtist],
-    ...(coverArt ? { coverArt } : {}),
-    size: internal.fileSize,
-    contentType: internal.mimeType,
-    suffix: track.format.replace(/^\./, '').toLowerCase(),
-    duration: Math.max(0, Math.round(track.duration ?? 0)),
-    albumId: album.id,
-    artistId: album.artistId,
-    type: 'music',
-    isVideo: false,
-    path: track.id,
-    discNumber: 1,
-    created: safeIsoTimestamp(internal.mtimeMs),
-    ...(favoriteIds?.has(track.id) ? { starred: true } : {})
-  };
-}
-
-function indexesFromArtists(artists: CatalogArtist[]) {
-  const groups = new Map<string, CatalogArtist[]>();
-  for (const artist of artists) {
-    const first = Array.from(artist.name.trim())[0]?.toLocaleUpperCase('pt-BR') ?? '#';
-    const key = /[\p{L}\p{N}]/u.test(first) ? first : '#';
-    const items = groups.get(key) ?? [];
-    items.push(artist);
-    groups.set(key, items);
-  }
-  return [...groups.entries()]
-    .sort(([left], [right]) => left.localeCompare(right, 'pt-BR'))
-    .map(([name, items]) => ({ name, artist: items.map(artistResponse) }));
-}
-
-function playlistResponse(playlist: Playlist, catalog: Catalog) {
-  const tracks = playlist.trackIds
-    .map(id => catalog.tracks.find(track => track.id === id))
-    .filter((track): track is Track => Boolean(track));
-  return {
-    id: playlist.id,
-    name: playlist.name,
-    public: false,
-    created: playlist.createdAt,
-    changed: playlist.updatedAt,
-    songCount: tracks.length,
-    duration: Math.max(0, Math.round(tracks.reduce((total, track) => total + (track.duration ?? 0), 0)))
-  };
-}
-
-function normalizeEndpoint(value: string) {
-  return value.endsWith('.view') ? value.slice(0, -5) : value;
-}
-
-function transcodeQuality(maxBitRate: number): TranscodeQuality {
-  if (maxBitRate <= 96) return 'economy';
-  if (maxBitRate <= 160) return 'balanced';
-  return 'high';
-}
-
-function authenticationFailure(query: Query) {
-  const apiKeyPresent = has(query, 'apiKey');
-  const passwordAuthPresent = has(query, 'u') || has(query, 'p');
-  const tokenAuthPresent = has(query, 't') || has(query, 's');
-  if (apiKeyPresent && (passwordAuthPresent || tokenAuthPresent)) {
-    return failure(43, 'Múltiplos mecanismos de autenticação foram enviados.');
-  }
-  if (tokenAuthPresent) {
-    return failure(41, 'Autenticação token/salt legada não é suportada. Use uma API key do Home Music.');
-  }
-  if (passwordAuthPresent && (!one(query, 'u') || !one(query, 'p'))) {
-    return failure(42, 'Autenticação legada incompleta. Use usuário + API key do Home Music.');
-  }
-  return null;
-}
-
-function decodeLegacyApiKey(value: string) {
-  if (!value.startsWith('enc:')) return value;
-  const encoded = value.slice(4);
-  if (!encoded || encoded.length % 2 !== 0 || !/^[0-9a-f]+$/i.test(encoded)) return null;
-  try {
-    return Buffer.from(encoded, 'hex').toString('utf8');
-  } catch {
-    return null;
-  }
-}
-
-function authenticatedRequest(
-  request: FastifyRequest,
-  query: Query,
-  credentials: OpenSubsonicCredentials,
-  limiter: OpenSubsonicRateLimiter
-): { identity: OpenSubsonicAuthenticatedKey } | { response: ReturnType<typeof failure>; statusCode?: number } {
-  const mechanismError = authenticationFailure(query);
-  if (mechanismError) return { response: mechanismError };
-
-  const apiKey = one(query, 'apiKey');
-  const legacyUsername = apiKey ? null : one(query, 'u');
-  const legacyPassword = apiKey ? null : one(query, 'p');
-  const legacyApiKey = legacyPassword ? decodeLegacyApiKey(legacyPassword) : null;
-  const rawKey = apiKey ?? legacyApiKey;
-
-  if (!rawKey) {
-    const subject = `invalid:${request.ip}`;
-    if (!limiter.hit(subject, INVALID_AUTH_ATTEMPTS_PER_MINUTE)) {
-      return { response: failure(0, 'Muitas tentativas de autenticação. Tente novamente em instantes.'), statusCode: 429 };
-    }
-    return { response: failure(apiKey ? 44 : 40, apiKey ? 'API key inválida ou ausente.' : 'Usuário ou chave de aplicativo inválidos.') };
-  }
-
-  const identity = credentials.authenticate(rawKey);
-  if (!identity || (legacyUsername != null && legacyUsername !== identity.user.username)) {
-    const subject = `invalid:${request.ip}`;
-    if (!limiter.hit(subject, INVALID_AUTH_ATTEMPTS_PER_MINUTE)) {
-      return { response: failure(0, 'Muitas tentativas de autenticação. Tente novamente em instantes.'), statusCode: 429 };
-    }
-    return {
-      response: failure(apiKey ? 44 : 40, apiKey ? 'API key inválida ou revogada.' : 'Usuário ou chave de aplicativo inválidos.')
-    };
-  }
-
-  if (!limiter.hit(`key:${identity.keyId}`, VALID_KEY_REQUESTS_PER_MINUTE)) {
-    return { response: failure(0, 'Limite temporário de requisições atingido.'), statusCode: 429 };
-  }
-  return { identity };
-}
-
-async function sendOriginalRange(
-  reply: FastifyReply,
-  opened: { handle: FileHandle; stat: { size: number } },
-  contentType: string,
-  rangeHeader: string | undefined
-) {
-  const range = parseByteRange(rangeHeader, opened.stat.size);
-  reply.header('Accept-Ranges', 'bytes');
-  reply.header('Content-Type', contentType);
-  reply.header('Cache-Control', 'private, no-store');
-
-  if (range === null) {
-    await opened.handle.close();
-    reply.header('Content-Range', `bytes */${opened.stat.size}`);
-    return reply.code(416).send();
-  }
-  if (range === undefined) {
-    reply.header('Content-Length', opened.stat.size);
-    return reply.send(opened.handle.createReadStream({ autoClose: true }));
-  }
-  reply.code(206);
-  reply.header('Content-Range', `bytes ${range.start}-${range.end}/${opened.stat.size}`);
-  reply.header('Content-Length', range.end - range.start + 1);
-  return reply.send(opened.handle.createReadStream({ start: range.start, end: range.end, autoClose: true }));
-}
-
-async function handleStream(
-  request: FastifyRequest<{ Querystring: Query }>,
-  reply: FastifyReply,
-  options: OpenSubsonicRouteOptions
-) {
-  const id = one(request.query, 'id');
-  if (!id) return reply.send(failure(10, 'Parâmetro obrigatório ausente: id.'));
-
-  const rawFormat = cleanText(one(request.query, 'format'), 32);
-  if (rawFormat && rawFormat !== 'raw' && rawFormat !== 'm4a' && rawFormat !== 'aac') {
-    return reply.send(failure(0, 'Formato de transcoding solicitado não é suportado.'));
-  }
-
-  const maxBitRateRaw = one(request.query, 'maxBitRate');
-  const maxBitRate = maxBitRateRaw == null ? null : boundedInteger(maxBitRateRaw, 0, 320);
-  if (maxBitRateRaw != null && (maxBitRate == null || maxBitRate < 32)) {
-    return reply.send(failure(10, 'Parâmetro maxBitRate inválido.'));
-  }
-
-  const wantsTranscode = rawFormat === 'm4a' || rawFormat === 'aac' || maxBitRate != null;
-  if (wantsTranscode) {
-    if (!options.media.ffmpegAvailable) {
-      return reply.send(failure(0, 'Transcoding não está disponível neste servidor.'));
-    }
-    const quality = transcodeQuality(maxBitRate ?? 160);
-    try {
-      const prepared = await options.media.prepareTranscode(id, quality, 'off');
-      if (!prepared) return reply.send(failure(70, 'Música não encontrada.'));
-      const info = await prepared.transcoded.stat();
-      if (!info.isFile() || info.size <= 0) {
-        await prepared.transcoded.close();
-        return reply.send(failure(0, 'Áudio transcodificado não está disponível.'));
-      }
-      return sendOriginalRange(
-        reply,
-        { handle: prepared.transcoded, stat: { size: info.size } },
-        'audio/mp4',
-        request.headers.range
-      );
-    } catch {
-      return reply.send(failure(0, 'Não foi possível preparar o áudio solicitado.'));
-    }
-  }
-
-  const source = await options.media.openTrack(id);
-  if (!source) return reply.send(failure(70, 'Música não encontrada.'));
-  return sendOriginalRange(reply, source.opened, source.track.mimeType, request.headers.range);
-}
 
 function ensureOwnUsername(query: Query, identity: OpenSubsonicAuthenticatedKey) {
   const requested = one(query, 'username');
@@ -981,3 +498,4 @@ export function registerOpenSubsonicRoutes(
     return reply.send(failure(0, `Endpoint OpenSubsonic não suportado pelo Home Music: ${endpoint}.`));
   });
 }
+

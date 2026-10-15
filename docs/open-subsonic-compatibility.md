@@ -29,3 +29,10 @@ O teste `open-subsonic-client-compat.test.ts` protege o contrato de resposta `f=
 - `getAlbumInfo2`, `getArtistInfo2`, `getSimilarSongs2`, `getTopSongs`, `download` e play queue: fora do subset até que um cliente alvo dependa deles.
 - Extensions anunciadas: somente `apiKeyAuthentication` e `songLyrics`; POST de formulário não é anunciado.
 - Matriz de clientes reais e XML seguem pendentes e dependem de QA manual com clientes (ex.: Feishin).
+
+## Decisões de escopo (#662)
+
+- **Formato:** o contrato permanece JSON-only. XML não será implementado sem um cliente alvo que o exija; clientes alvo devem enviar `f=json`.
+- **Cliente alvo:** Feishin (autenticação `apiKey` nativa ou `u`+`p=<app-key>`). Fluxo a validar manualmente: login → catálogo → busca → playback → playlist → favorito → scrobble. A versão testada deve ser registrada aqui após QA real; até lá o cliente não é classificado como compatível.
+- **Estrutura do módulo:** `open-subsonic-routes.ts` (handlers), `-catalog.ts` (projeção da biblioteca), `-auth.ts` (autenticação e rate limit), `-stream.ts` (mídia/Range) e `-http.ts` (envelope e parâmetros).
+- **Não implementar:** `getNowPlaying`, Fase B, JSONP e HTTP form POST até haver requisito real.
