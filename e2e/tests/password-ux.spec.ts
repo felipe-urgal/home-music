@@ -76,9 +76,15 @@ test('Alterar senha permite mostrar e ocultar os três campos juntos', async ({ 
   await page.getByRole('button', { name: /Alterar senha/ }).click();
   await expect(page.locator('#my-account-title')).toHaveText('Alterar senha');
 
-  const current = page.getByLabel('Senha atual');
-  const next = page.getByLabel('Nova senha', { exact: true });
-  const confirmation = page.getByLabel('Confirmar nova senha');
+  // No desktop, os botões de visibilidade ficam dentro dos labels e também
+  // correspondem a getByLabel(). Restrinja a seleção aos inputs do formulário.
+  const passwordForm = page.locator('#my-account-password-v3-form, form.my-account-password-form');
+  const current = passwordForm.locator('input[autocomplete="current-password"]');
+  const newPasswords = passwordForm.locator('input[autocomplete="new-password"]');
+  const next = newPasswords.nth(0);
+  const confirmation = newPasswords.nth(1);
+  await expect(current).toHaveCount(1);
+  await expect(newPasswords).toHaveCount(2);
   await expect(current).toHaveAttribute('type', 'password');
   await expect(next).toHaveAttribute('type', 'password');
   await expect(confirmation).toHaveAttribute('type', 'password');
