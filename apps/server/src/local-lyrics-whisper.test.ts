@@ -154,6 +154,21 @@ describe('LocalLyricsWhisperService', () => {
     }
   });
 
+  it('reuses an active equivalent Whisper job', async () => {
+    const context = await fixture(null);
+    try {
+      const [first, second] = await Promise.all([
+        context.service.startJob({ trackId: TRACK.id, mode: 'transcribe' }, 'admin-1'),
+        context.service.startJob({ trackId: TRACK.id, mode: 'transcribe' }, 'admin-1')
+      ]);
+      assert.equal(second.id, first.id);
+      const job = await waitForJob(context.service, first.id);
+      assert.equal(job.status, 'review');
+    } finally {
+      await context.close();
+    }
+  });
+
   it('aligns reliable plain lyrics and keeps the original words in the review candidate', async () => {
     const plain: LyricsResponse = {
       source: 'txt',
