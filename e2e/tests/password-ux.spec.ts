@@ -68,15 +68,11 @@ test('Alterar senha permite mostrar e ocultar os três campos juntos', async ({ 
   await page.getByRole('button', { name: 'Entrar' }).click();
   await expect(page.getByRole('heading', { name: 'E2E Track' })).toBeVisible();
 
-  const viewport = page.viewportSize();
-  if (viewport && viewport.width >= 700 && viewport.width < 1024) {
-    await page.getByRole('button', { name: 'Voltar à biblioteca', exact: true }).click();
-  }
-
-  const accountEntry = page.getByRole('button', { name: /^(Minha conta|Conta)/ }).first();
-  await expect(accountEntry).toBeVisible();
-  await accountEntry.click();
+  // O login pode abrir diretamente o player; /account é a rota canônica
+  // independentemente da navegação responsiva que estiver montada.
+  await page.goto('/account');
   await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
+  const viewport = page.viewportSize();
   await page.getByRole('button', { name: /Alterar senha/ }).click();
   await expect(page.locator('#my-account-title')).toHaveText('Alterar senha');
 

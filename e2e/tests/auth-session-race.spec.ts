@@ -12,17 +12,9 @@ async function login(page: Page) {
 }
 
 async function openAccount(page: Page) {
-  const width = page.viewportSize()?.width || 0;
-  if (width >= 1024) {
-    const expand = page.getByRole('button', { name: 'Expandir barra superior' });
-    if (await expand.isVisible().catch(() => false)) await expand.click();
-    await page.getByTestId('desktop-sidebar').getByRole('button', { name: /Minha conta/ }).click();
-  } else if (width < 700) {
-    await page.getByRole('navigation', { name: 'Navegação principal' })
-      .getByRole('button', { name: 'Conta', exact: true }).click();
-  } else {
-    await page.getByRole('button', { name: /Minha conta ·/ }).click();
-  }
+  // A rota canônica /account funciona em desktop, tablet e mobile, mesmo
+  // quando o login abre diretamente a tela de reprodução.
+  await page.goto('/account');
   await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
 }
 
