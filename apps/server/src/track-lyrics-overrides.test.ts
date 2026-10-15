@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { readTrackLyrics } from './lyrics.js';
 import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -71,6 +72,25 @@ describe('TrackLyricsOverrideStore', () => {
     );
     assert.ok(restored?.updatedAt);
     store.close();
+  });
+
+  it('returns to sidecar after clearing a managed override without history', async () => {
+    const { databasePath, trackId } = await databaseWithTrack();
+    const audio = path.join(path.dirname(databasePath), 'track.mp3');
+    await writeFile(audio, 'audio');
+    await writeFile(path.join(path.dirname(databasePath), 'track.lrc'), '[00:01.00]sidecar original');
+    const store = new TrackLyricsOverrideStore(databasePath);
+    try {
+      assert.ok(store.save(trackId, {
+        mode: 'plain', text: 'letra manual', origin: 'manual',
+        provider: null, externalId: null, language: null
+      }));
+      assert.equal((await readTrackLyrics(path.dirname(databasePath), audio, store.get(trackId)))?.source, 'txt');
+      assert.equal(store.clear(trackId), true);
+      assert.equal((await readTrackLyrics(path.dirname(databasePath), audio, store.get(trackId)))?.lines[0]?.text, 'sidecar original');
+    } finally {
+      store.close();
+    }
   });
 
   it('removes generated lyrics when there is no previous managed source', async () => {
