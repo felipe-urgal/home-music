@@ -450,20 +450,26 @@ export class LocalLyricsWhisperService {
     const normalizedQuery = normalizeText(query);
     const safeLimit = Math.max(1, Math.min(MAX_ELIGIBLE_TRACKS, Math.trunc(limit)));
     const tracks = [] as LocalLyricsEligibleTracksResponse['tracks'];
-    for (const track of this.options.library.listTracks()) {
-      if (tracks.length >= safeLimit) break;
-      if (normalizedQuery && !normalizeText(`${track.title} ${track.artist} ${track.album}`).includes(normalizedQuery)) continue;
-      const lyrics = await this.options.library.readEffectiveLyrics(track.id);
-      const action = actionForLyrics(lyrics);
-      if (!action) continue;
-      tracks.push({
-        id: track.id,
-        title: track.title,
-        artist: track.artist,
-        album: track.album,
-        action,
-        currentSynchronized: Boolean(lyrics?.synchronized)
-      });
+    // Bounded parallel filesystem reads preserve listing order without an independent index.
+    const eligible = this.options.library.listTracks().filter(track =>
+      !normalizedQuery || normalizeText(`${track.title} ${track.artist} ${track.album}`).includes(normalizedQuery)
+    );
+    const concurrency = 8;
+    for (let offset = 0; offset < eligible.length && tracks.length < safeLimit; offset += concurrency) {
+      if (this.closed) break;
+      const batch = eligible.slice(offset, offset + concurrency);
+      const lyrics = await Promise.all(batch.map(track => this.options.library.readEffectiveLyrics(track.id)));
+      for (let index = 0; index < batch.length && tracks.length < safeLimit; index += 1) {
+        const track = batch[index];
+        const currentLyrics = lyrics[index];
+        if (!track) continue;
+        const action = actionForLyrics(currentLyrics ?? null);
+        if (!action) continue;
+        tracks.push({
+          id: track.id, title: track.title, artist: track.artist, album: track.album,
+          action, currentSynchronized: Boolean(currentLyrics?.synchronized)
+        });
+      }
     }
     return { tracks };
   }
