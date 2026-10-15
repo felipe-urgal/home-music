@@ -81,3 +81,24 @@ test('falha HTTP no logout mantém a sessão e permite tentar novamente', async 
   await expect(page.locator('#my-account-title')).toHaveText('Minha conta');
   await expect(page.getByRole('button', { name: 'Sair da conta', exact: true }).first()).toBeEnabled();
 });
+
+test('logout ignora 401 tardio de outra requisição e não restaura sessão', async ({ page }) => {
+  await login(page);
+  await openAccount(page);
+  let releaseLogout!: () => void;
+  let markStarted!: () => void;
+  const proceed = new Promise<void>(resolve => { releaseLogout = resolve; });
+  const started = new Promise<void>(resolve => { markStarted = resolve; });
+  await page.route('**/api/auth/logout', async route => {
+    markStarted();
+    await proceed;
+    await route.continue();
+  });
+
+  await page.getByRole('button', { name: 'Sair da conta', exact: true }).first().click();
+  await started;
+  await page.evaluate(() => window.dispatchEvent(new Event('home-music:auth-required')));
+  releaseLogout();
+  await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible();
+  await expect(page.locator('#my-account-title')).toHaveCount(0);
+});
