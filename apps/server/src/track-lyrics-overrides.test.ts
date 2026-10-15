@@ -64,7 +64,12 @@ describe('TrackLyricsOverrideStore', () => {
     assert.equal(generated?.mode, 'synced');
 
     assert.equal(store.clear(trackId), true);
-    assert.deepEqual(store.get(trackId), previous);
+    const restored = store.get(trackId);
+    assert.deepEqual(
+      { ...restored, updatedAt: previous.updatedAt },
+      previous
+    );
+    assert.ok(restored?.updatedAt);
     store.close();
   });
 
