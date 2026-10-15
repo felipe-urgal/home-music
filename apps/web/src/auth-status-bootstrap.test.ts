@@ -33,6 +33,18 @@ describe('fetchAuthStatusResponse', () => {
     }));
   });
 
+  it('propaga cancelamento do owner e limpa o listener', async () => {
+    const controller = new AbortController();
+    const fetchImpl = vi.fn((_input: string, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init?.signal?.addEventListener('abort', () => reject(new Error('cancelled')), { once: true });
+    }));
+    const pending = fetchAuthStatusResponse({ fetchImpl, online: true, signal: controller.signal });
+    const rejection = expect(pending).rejects.toThrow('cancelled');
+    controller.abort();
+    await rejection;
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
   it('preserva a resposta real do servidor quando ela chega a tempo', async () => {
     const response = new Response(null, { status: 401 });
     const fetchImpl = vi.fn(async () => response);

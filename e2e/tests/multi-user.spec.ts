@@ -220,6 +220,9 @@ test('admin e user preservam role, sessões, playlists e isolamento em todos os 
   await resetBrowserSession(page);
   await submitLogin(page, userUsername, temporaryPassword!);
   await expect(page.getByRole('heading', { name: 'Defina uma nova senha' })).toBeVisible();
+  // Full reload must not release the server-side mandatory password gate.
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Defina uma nova senha' })).toBeVisible();
   await page.getByLabel('Senha temporária', { exact: true }).fill(temporaryPassword!);
   await page.getByLabel('Nova senha', { exact: true }).fill(userPassword);
   await page.getByLabel('Confirmar nova senha', { exact: true }).fill(userPassword);

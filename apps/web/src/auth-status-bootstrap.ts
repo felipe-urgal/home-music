@@ -6,6 +6,7 @@ type FetchAuthStatusOptions = {
   fetchImpl?: AuthStatusFetch;
   online?: boolean;
   timeoutMs?: number;
+  signal?: AbortSignal;
 };
 
 function browserReportsOnline() {
@@ -15,11 +16,15 @@ function browserReportsOnline() {
 export async function fetchAuthStatusResponse({
   fetchImpl = (input, init) => fetch(input, init),
   online = browserReportsOnline(),
-  timeoutMs = AUTH_STATUS_TIMEOUT_MS
+  timeoutMs = AUTH_STATUS_TIMEOUT_MS,
+  signal
 }: FetchAuthStatusOptions = {}) {
   if (!online) throw new Error('Navegador offline.');
 
   const controller = new AbortController();
+  const onAbort = () => controller.abort();
+  signal?.addEventListener('abort', onAbort, { once: true });
+  if (signal?.aborted) controller.abort();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
@@ -30,5 +35,6 @@ export async function fetchAuthStatusResponse({
     });
   } finally {
     clearTimeout(timeoutId);
+    signal?.removeEventListener('abort', onAbort);
   }
 }

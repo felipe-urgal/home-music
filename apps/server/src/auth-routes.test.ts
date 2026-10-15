@@ -8,6 +8,7 @@ import Fastify from 'fastify';
 import { AccountPasswordService } from './account-password.js';
 import {
   SESSION_CAPACITY_RETRY_AFTER_SECONDS,
+  SESSION_COOKIE_NAME,
   SessionManager
 } from './auth.js';
 import { registerAuthRoutes } from './auth-routes.js';
@@ -228,6 +229,56 @@ test('login limita de forma determinística a concorrência de verificações de
     assert.equal(protection.metrics().verificationRejectedConcurrency, 4);
   } finally {
     releaseVerifications();
+    await context.close();
+  }
+});
+
+test('status renova cookie, expõe role atual e não renova sessão ausente', async () => {
+  const context = await createAuthTestContext('home-music-auth-routes-fresh-status-');
+  await insertUser(context.databasePath, 'user-1', 'user', USER_PASSWORD, 'user');
+
+  registerAuthRoutes(context.app, {
+    authConfigured: true,
+    authUsers: context.authUsers,
+    sessions: context.sessions,
+    accountPasswords: context.accountPasswords,
+    loginAbuseProtection: new LoginAbuseProtection(),
+    forceSecureCookie: true,
+    trustTailscaleForwardedFor: false
+  });
+
+  try {
+    const token = context.sessions.createSessionForUser('user-1');
+    const headers = { cookie: `${SESSION_COOKIE_NAME}=${token}` };
+    const first = await context.app.inject({ method: 'GET', url: '/api/auth/status', headers });
+    assert.equal(first.statusCode, 200);
+    assert.equal(first.json().user.role, 'user');
+    assert.match(String(first.headers['set-cookie']), /HttpOnly/);
+    assert.match(String(first.headers['set-cookie']), /SameSite=Strict/);
+    assert.match(String(first.headers['set-cookie']), /Secure/);
+    assert.equal(first.headers['cache-control'], 'no-store');
+
+    // Role is read from the current persisted user, never from stale frontend state.
+    const database = new DatabaseSync(context.databasePath);
+    try {
+      database.prepare("UPDATE users SET role = 'admin' WHERE id = 'user-1'").run();
+    } finally {
+      database.close();
+    }
+    const promoted = await context.app.inject({ method: 'GET', url: '/api/auth/status', headers });
+    assert.equal(promoted.statusCode, 200);
+    assert.equal(promoted.json().user.role, 'admin');
+
+    context.sessions.revokeSession(token);
+    const expired = await context.app.inject({ method: 'GET', url: '/api/auth/status', headers });
+    assert.equal(expired.statusCode, 200);
+    assert.equal(expired.json().authenticated, false);
+    assert.equal(expired.headers['set-cookie'], undefined);
+
+    const missing = await context.app.inject({ method: 'GET', url: '/api/auth/status' });
+    assert.equal(missing.json().authenticated, false);
+    assert.equal(missing.headers['set-cookie'], undefined);
+  } finally {
     await context.close();
   }
 });
