@@ -60,7 +60,14 @@ export async function readSidecarLyrics(libraryRoot: string, audioPath: string):
 
     try {
       if (opened.stat.size > MAX_LYRICS_BYTES) continue;
-      const content = await opened.handle.readFile({ encoding: 'utf8' });
+      const bytes = await opened.handle.readFile();
+      let content: string;
+      try {
+        content = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+      } catch {
+        // Invalid encoding is not a usable sidecar: continue with the next candidate.
+        continue;
+      }
       const lyrics = parseLyrics(content, candidate.source);
       if (lyrics.lines.length) return lyrics;
     } finally {
