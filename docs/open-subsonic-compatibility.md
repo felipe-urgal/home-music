@@ -20,3 +20,12 @@ Use uma chave OpenSubsonic dedicada por cliente, nunca a senha da conta web. A A
 Registre para cada cliente: nome/versão, sistema operacional, se envia `f=json`, método de autenticação e resultados de login, catálogo, busca, reprodução, capas, playlists, favoritos, lyrics e scrobble. Não classifique como compatível sem execução real.
 
 O teste `open-subsonic-client-compat.test.ts` protege o contrato de resposta `f=json`, `f` ausente e formatos não suportados. Esses testes não substituem QA com clientes reais.
+
+## Endpoints de descoberta
+
+- `getRandomSongs`: implementado (limite 500, `musicFolderId` validado).
+- `getGenres` e `getSongsByGenre`: implementados com resposta vazia, pois a biblioteca ainda não indexa gênero. Parâmetros e paginação são validados.
+- `getNowPlaying`: não suportado; não há fonte de verdade segura de reprodução em andamento por usuário.
+- `getAlbumInfo2`, `getArtistInfo2`, `getSimilarSongs2`, `getTopSongs`, `download` e play queue: fora do subset até que um cliente alvo dependa deles.
+- Extensions anunciadas: somente `apiKeyAuthentication` e `songLyrics`; POST de formulário não é anunciado.
+- Matriz de clientes reais e XML seguem pendentes e dependem de QA manual com clientes (ex.: Feishin).

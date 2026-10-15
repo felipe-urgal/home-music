@@ -710,6 +710,24 @@ export function registerOpenSubsonicRoutes(
       }));
     }
 
+    // A biblioteca ainda não indexa gênero; respostas vazias são válidas e não inventam dados.
+    if (endpoint === 'getGenres') {
+      return reply.send(success({ genres: { genre: [] } }));
+    }
+
+    if (endpoint === 'getSongsByGenre') {
+      const genre = cleanText(one(request.query, 'genre'), 200);
+      const count = boundedInteger(one(request.query, 'count'), DEFAULT_LIST_COUNT);
+      const offset = boundedInteger(one(request.query, 'offset'), 0);
+      const musicFolderId = one(request.query, 'musicFolderId');
+      if (!genre) return reply.send(failure(10, 'Parâmetro obrigatório ausente: genre.'));
+      if (count == null || offset == null) return reply.send(failure(10, 'Paginação inválida.'));
+      if (musicFolderId != null && musicFolderId !== MUSIC_FOLDER_ID) {
+        return reply.send(failure(70, 'Pasta de música não encontrada.'));
+      }
+      return reply.send(success({ songsByGenre: { song: [] } }));
+    }
+
     if (endpoint === 'getSong') {
       const id = one(request.query, 'id');
       if (!id) return reply.send(failure(10, 'Parâmetro obrigatório ausente: id.'));
