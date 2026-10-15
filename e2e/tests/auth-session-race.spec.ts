@@ -102,3 +102,16 @@ test('logout ignora 401 tardio de outra requisição e não restaura sessão', a
   await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible();
   await expect(page.locator('#my-account-title')).toHaveCount(0);
 });
+
+test('sessão revogada em outra aba é removida após revalidar', async ({ page }) => {
+  await login(page);
+  const loggedOut = await page.context().request.post('/api/auth/logout', {
+    headers: { 'X-Home-Music-Request': '1' }
+  });
+  expect(loggedOut.status()).toBe(204);
+
+  await page.evaluate(() => window.dispatchEvent(new Event('home-music:auth-required')));
+  await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible();
+  const offlineUserId = await page.evaluate(() => localStorage.getItem('home-music:offline-user-id:v1'));
+  expect(offlineUserId).toBeNull();
+});
