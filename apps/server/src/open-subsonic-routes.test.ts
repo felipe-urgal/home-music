@@ -332,7 +332,7 @@ test('OpenSubsonic falha explicitamente para endpoint fora do subset', async () 
   const { app } = await createTestServer(mediaPath);
 
   try {
-    const response = await app.inject({ method: 'GET', url: '/rest/getGenres.view?apiKey=key-a&f=json' });
+    const response = await app.inject({ method: 'GET', url: '/rest/getNowPlaying.view?apiKey=key-a&f=json' });
     const body = responseBody(response)['subsonic-response'];
     assert.equal(body.status, 'failed');
     assert.equal(body.error.code, 0);
@@ -364,6 +364,32 @@ test('getRandomSongs respeita limites, pasta e retorna faixas sem duplicação',
     }
     const invalidFolder = await app.inject({ method: 'GET', url: '/rest/getRandomSongs?apiKey=key-a&musicFolderId=other' });
     assert.equal(responseBody(invalidFolder)['subsonic-response'].error.code, 70);
+  } finally {
+    await app.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('getGenres e getSongsByGenre retornam listas vazias validando parâmetros', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'home-music-open-subsonic-genres-'));
+  const mediaPath = path.join(root, 'track.mp3');
+  await writeFile(mediaPath, Buffer.from('0123456789'));
+  const { app } = await createTestServer(mediaPath);
+  try {
+    const genres = responseBody(await app.inject({ method: 'GET', url: '/rest/getGenres.view?apiKey=key-a&f=json' }))['subsonic-response'];
+    assert.equal(genres.status, 'ok');
+    assert.deepEqual(genres.genres.genre, []);
+
+    const songs = responseBody(await app.inject({ method: 'GET', url: '/rest/getSongsByGenre?apiKey=key-a&genre=Rock&count=5&offset=0' }))['subsonic-response'];
+    assert.equal(songs.status, 'ok');
+    assert.deepEqual(songs.songsByGenre.song, []);
+
+    for (const query of ['', 'genre=Rock&count=501', 'genre=Rock&offset=-1']) {
+      const body = responseBody(await app.inject({ method: 'GET', url: `/rest/getSongsByGenre?apiKey=key-a&${query}` }))['subsonic-response'];
+      assert.equal(body.error.code, 10);
+    }
+    const folder = responseBody(await app.inject({ method: 'GET', url: '/rest/getSongsByGenre?apiKey=key-a&genre=Rock&musicFolderId=x' }))['subsonic-response'];
+    assert.equal(folder.error.code, 70);
   } finally {
     await app.close();
     await rm(root, { recursive: true, force: true });

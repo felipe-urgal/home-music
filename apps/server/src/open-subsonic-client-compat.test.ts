@@ -127,7 +127,7 @@ test('OpenSubsonic rejeita endpoints de descoberta ainda não implementados', as
   await app.ready();
 
   try {
-    for (const endpoint of ['getGenres', 'getSongsByGenre', 'getNowPlaying']) {
+    for (const endpoint of ['getNowPlaying', 'getAlbumInfo2', 'getTopSongs']) {
       const response = await app.inject({
         method: 'GET',
         url: `/rest/${endpoint}.view?apiKey=key-a&v=1.16.1&c=contract-tests&f=json`
