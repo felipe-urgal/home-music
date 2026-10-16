@@ -16,6 +16,7 @@ import {
   parseTranscodeQuality,
   seekableInputFd,
   TranscodeManager,
+  TranscodeExecutionError,
   transcodeCacheKey,
   type TranscodeRunner
 } from './transcoding.js';
@@ -329,6 +330,47 @@ test('eviction preserva transcode com leitor ativo e remove após release', asyn
     await manager.prepare(source('third'));
     assert.equal((await readdir(cacheDir)).filter(name => name.endsWith('.m4a')).length, 1);
   } finally {
+    await rm(cacheDir, { recursive: true, force: true });
+  }
+});
+
+test('último consumidor abortado cancela geração compartilhada sem publicar cache', async () => {
+  const cacheDir = await mkdtemp(path.join(os.tmpdir(), 'home-music-transcode-last-abort-'));
+  const started = deferred();
+  const cancelled = deferred();
+  const firstController = new AbortController();
+  const secondController = new AbortController();
+  const runner: TranscodeRunner = async ({ signal }) => {
+    started.resolve();
+    if (signal?.aborted) { cancelled.resolve(); return; }
+    await new Promise<void>(resolve => {
+      signal?.addEventListener('abort', () => { cancelled.resolve(); resolve(); }, { once: true });
+    });
+    throw new TranscodeExecutionError('aborted', 'cancelled');
+  };
+  const manager = new TranscodeManager({
+    cacheDir, command: 'ffmpeg-test', maxCacheBytes: 1024, runner
+  });
+  const source = {
+    trackId: 'shared-abort', sourceSize: 15, sourceMtimeMs: 20,
+    quality: 'balanced' as const,
+    createInput: () => Object.assign(Readable.from(Buffer.from('source')), { fd: 27 })
+  };
+  try {
+    const first = withHeavyWorkRequestContext({ ownerId: 'a', signal: firstController.signal }, () => manager.prepare(source));
+    await started.promise;
+    const second = withHeavyWorkRequestContext({ ownerId: 'b', signal: secondController.signal }, () => manager.prepare(source));
+    await waitFor(() => [...(manager as unknown as { pending: Map<string, { consumers: number }> }).pending.values()].some(item => item.consumers === 2));
+    firstController.abort();
+    await assert.rejects(first, HeavyWorkQueueAbortedError);
+    secondController.abort();
+    await assert.rejects(second, HeavyWorkQueueAbortedError);
+    await cancelled.promise;
+    await waitFor(() => manager.activeCount === 0);
+    assert.equal((await readdir(cacheDir)).filter(name => name.endsWith('.m4a')).length, 0);
+  } finally {
+    firstController.abort();
+    secondController.abort();
     await rm(cacheDir, { recursive: true, force: true });
   }
 });
