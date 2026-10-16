@@ -137,3 +137,33 @@ test('HTTP transcode libera lease e handle quando stat do arquivo falha', async 
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('HTTP transcode retorna 503 e libera lease quando o cache fica vazio', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'home-music-transcode-empty-'));
+  const filePath = path.join(root, 'empty.m4a');
+  await writeFile(filePath, Buffer.alloc(0));
+  const app = Fastify();
+  let releases = 0;
+  const media = {
+    ffmpegAvailable: true,
+    prepareTranscode: async () => ({
+      prepared: { cacheHit: true, path: filePath },
+      transcoded: await open(filePath, 'r'),
+      gainDb: null,
+      release: () => { releases++; }
+    })
+  };
+  registerMediaRoutes(
+    app,
+    { root, getTrack: () => ({ id: 'song', mimeType: 'audio/mpeg' }) } as unknown as LibraryService,
+    media as unknown as TrackMediaInfrastructure
+  );
+  try {
+    const response = await app.inject({ method: 'GET', url: '/api/tracks/song/transcode' });
+    assert.equal(response.statusCode, 503);
+    assert.equal(releases, 1);
+  } finally {
+    await app.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
