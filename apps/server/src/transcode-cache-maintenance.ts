@@ -23,6 +23,7 @@ export type TranscodeCacheStatus = {
   temporaryEntries: number;
   active: number;
   pending: number;
+  readers: number;
 };
 
 export type TranscodeCacheClearResult = {
@@ -55,6 +56,7 @@ function safeCount(value: number) {
 export class TranscodeCacheMaintenance {
   private maintenanceActive = false;
   private activeOperations = 0;
+  private readers = 0;
 
   constructor(private readonly options: {
     cacheDir: string;
@@ -70,6 +72,18 @@ export class TranscodeCacheMaintenance {
     } finally {
       this.activeOperations = Math.max(0, this.activeOperations - 1);
     }
+  }
+
+  acquireReadLease(): () => void {
+    this.enterOperation();
+    this.readers += 1;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.readers -= 1;
+      this.activeOperations -= 1;
+    };
   }
 
   async status(): Promise<TranscodeCacheStatus> {
@@ -181,7 +195,8 @@ export class TranscodeCacheMaintenance {
       entries: files.filter(file => !file.temporary).length,
       temporaryEntries: files.filter(file => file.temporary).length,
       active: Math.max(runtime.active, this.activeOperations),
-      pending: runtime.pending
+      pending: runtime.pending,
+      readers: this.readers
     };
   }
 }
