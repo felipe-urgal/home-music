@@ -420,3 +420,34 @@ test('cache hit continua disponível com fila de FFmpeg saturada sem consumir sl
     await rm(cacheDir, { recursive: true, force: true });
   }
 });
+
+test('falha de transcode registra evento sem divulgar caminho físico nem gerar cache', async () => {
+  const cacheDir = await mkdtemp(path.join(os.tmpdir(), 'home-music-transcode-failure-metrics-'));
+  const logs: Array<Record<string, unknown>> = [];
+  const observability = new LongJobObservability({
+    info(bindings) { logs.push(bindings as Record<string, unknown>); },
+    warn(bindings) { logs.push(bindings as Record<string, unknown>); }
+  }, { createId: () => 'transcode-failure' });
+  const manager = new TranscodeManager({
+    cacheDir,
+    command: 'ffmpeg-test',
+    maxCacheBytes: 1024,
+    observability,
+    runner: async () => { throw new Error('transcode failed'); }
+  });
+  try {
+    await assert.rejects(manager.prepare({
+      trackId: 'track-failed',
+      sourceSize: 100,
+      sourceMtimeMs: 200,
+      quality: 'high',
+      createInput: () => Object.assign(Readable.from(Buffer.from('source')), { fd: 17 })
+    }), /transcode failed/);
+    assert.deepEqual(logs.map(item => item.event), ['long_job.started', 'long_job.failed']);
+    assert.equal(logs[0].resourceId, 'track-failed');
+    assert.ok(!JSON.stringify(logs).includes(cacheDir));
+    assert.equal((await readdir(cacheDir)).filter(name => name.endsWith('.m4a')).length, 0);
+  } finally {
+    await rm(cacheDir, { recursive: true, force: true });
+  }
+});
