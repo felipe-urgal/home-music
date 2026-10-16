@@ -102,3 +102,38 @@ test('HTTP transcode: miss, hit, range, 416, invalid profile and FFmpeg unavaila
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('HTTP transcode libera lease e handle quando stat do arquivo falha', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'home-music-transcode-error-'));
+  const filePath = path.join(root, 'cached.m4a');
+  await writeFile(filePath, BYTES);
+  const handle = await open(filePath, 'r');
+  const originalStat = handle.stat.bind(handle);
+  let released = 0;
+  // Simula falha após obter o lease, antes de criar o response stream.
+  handle.stat = async (...args) => {
+    await originalStat(...args);
+    throw new Error('stat inesperado');
+  };
+  const app = Fastify();
+  const library = { root, getTrack: () => ({ id: 'song', mimeType: 'audio/mpeg' }) };
+  const media = {
+    ffmpegAvailable: true,
+    prepareTranscode: async () => ({
+      prepared: { cacheHit: false, path: filePath },
+      transcoded: handle,
+      gainDb: null,
+      release: () => { released += 1; }
+    })
+  };
+  registerMediaRoutes(app, library as unknown as LibraryService, media as unknown as TrackMediaInfrastructure);
+  try {
+    const response = await app.inject({ method: 'GET', url: '/api/tracks/song/transcode' });
+    assert.equal(response.statusCode, 500);
+    assert.equal(released, 1);
+    assert.equal(handle.fd, -1);
+  } finally {
+    await app.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
