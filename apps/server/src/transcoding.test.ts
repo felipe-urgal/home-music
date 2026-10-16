@@ -374,3 +374,49 @@ test('último consumidor abortado cancela geração compartilhada sem publicar c
     await rm(cacheDir, { recursive: true, force: true });
   }
 });
+
+test('cache hit continua disponível com fila de FFmpeg saturada sem consumir slot', async () => {
+  const cacheDir = await mkdtemp(path.join(os.tmpdir(), 'home-music-transcode-cache-hit-backpressure-'));
+  const started = deferred();
+  const release = deferred();
+  let runs = 0;
+  const manager = new TranscodeManager({
+    cacheDir,
+    command: 'ffmpeg-test',
+    maxCacheBytes: 10_000,
+    maxConcurrent: 1,
+    maxPending: 1,
+    maxPendingPerOwner: 1,
+    runner: async ({ outputPath }) => {
+      runs++;
+      if (runs === 2) {
+        started.resolve();
+        await release.promise;
+      }
+      await writeFile(outputPath, Buffer.alloc(50, 7));
+    }
+  });
+  const source = (trackId: string) => ({
+    trackId, sourceSize: 100, sourceMtimeMs: 200, quality: 'balanced' as const,
+    createInput: () => Object.assign(Readable.from(Buffer.from('source')), { fd: 33 })
+  });
+  try {
+    const cached = await manager.prepare(source('cached'));
+    assert.equal(cached.cacheHit, false);
+    const running = manager.prepare(source('running'));
+    await started.promise;
+    const queued = manager.prepare(source('queued'));
+    await waitFor(() => manager.queueRuntime.pending === 1);
+    const hit = await manager.prepare(source('cached'));
+    assert.equal(hit.cacheHit, true);
+    assert.equal(hit.path, cached.path);
+    assert.equal(manager.queueRuntime.pending, 1);
+    assert.equal(runs, 2);
+    release.resolve();
+    await Promise.all([running, queued]);
+    assert.equal(runs, 3);
+  } finally {
+    release.resolve();
+    await rm(cacheDir, { recursive: true, force: true });
+  }
+});
