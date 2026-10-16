@@ -107,6 +107,7 @@ export function registerMediaRoutes(
       });
     }
 
+    let releaseLease: (() => void) | undefined;
     try {
       const preparedMedia = await media.prepareTranscode(
         request.params.id,
@@ -117,10 +118,12 @@ export function registerMediaRoutes(
         return reply.code(404).send({ error: 'Música não encontrada.' });
       }
 
-      const { track, prepared, transcoded, gainDb } = preparedMedia;
+      const { prepared, transcoded, gainDb, release } = preparedMedia;
+      releaseLease = release;
       const info = await transcoded.stat();
       if (!info.isFile() || info.size <= 0) {
         await transcoded.close();
+        release();
         return reply.code(503).send({
           error: 'Áudio transcodificado não está disponível.'
         });
@@ -139,24 +142,30 @@ export function registerMediaRoutes(
 
       if (range === null) {
         await transcoded.close();
+        release();
         reply.header('Content-Range', `bytes */${info.size}`);
         return reply.code(416).send();
       }
 
       if (range === undefined) {
         reply.header('Content-Length', info.size);
-        return reply.send(transcoded.createReadStream({ autoClose: true }));
+        const stream = transcoded.createReadStream({ autoClose: true });
+        stream.once('close', release);
+        return reply.send(stream);
       }
 
       reply.code(206);
       reply.header('Content-Range', `bytes ${range.start}-${range.end}/${info.size}`);
       reply.header('Content-Length', range.end - range.start + 1);
-      return reply.send(transcoded.createReadStream({
+      const stream = transcoded.createReadStream({
         start: range.start,
         end: range.end,
         autoClose: true
-      }));
+      });
+      stream.once('close', release);
+      return reply.send(stream);
     } catch (error) {
+      releaseLease?.();
       if (error instanceof TranscodeExecutionError) {
         if (error.reason === 'aborted' && (request.raw.aborted || reply.raw.destroyed)) return;
 
