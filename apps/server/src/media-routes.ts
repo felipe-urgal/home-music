@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { FileHandle } from 'node:fs/promises';
 import type { FastifyInstance } from 'fastify';
 import type { NormalizationMode } from '@home-music/shared';
 import type { LibraryService } from './library-service.js';
@@ -108,6 +109,7 @@ export function registerMediaRoutes(
     }
 
     let releaseLease: (() => void) | undefined;
+    let transcodeHandle: FileHandle | undefined;
     try {
       const preparedMedia = await media.prepareTranscode(
         request.params.id,
@@ -120,6 +122,7 @@ export function registerMediaRoutes(
 
       const { prepared, transcoded, gainDb, release } = preparedMedia;
       releaseLease = release;
+      transcodeHandle = transcoded;
       const info = await transcoded.stat();
       if (!info.isFile() || info.size <= 0) {
         await transcoded.close();
@@ -165,6 +168,7 @@ export function registerMediaRoutes(
       stream.once('close', release);
       return reply.send(stream);
     } catch (error) {
+      await transcodeHandle?.close().catch(() => undefined);
       releaseLease?.();
       if (error instanceof TranscodeExecutionError) {
         if (error.reason === 'aborted' && (request.raw.aborted || reply.raw.destroyed)) return;
