@@ -134,7 +134,7 @@ export class TrackMediaInfrastructure {
 
     const gainDb = replayGainForMode(track, normalization);
     try {
-      const { prepared, transcoded } = await this.options.transcodeCacheMaintenance.withTranscode(async () => {
+      const { prepared, transcoded, release } = await this.options.transcodeCacheMaintenance.withTranscode(async () => {
         const inspected = await openRegularFileInside(root, track.filePath);
         const sourceSize = inspected.stat.size;
         const sourceMtimeMs = inspected.stat.mtimeMs;
@@ -158,13 +158,25 @@ export class TrackMediaInfrastructure {
             return source.handle.createReadStream({ autoClose: true });
           }
         });
-        return {
-          prepared,
-          transcoded: await open(prepared.path, 'r')
-        };
+        const releaseMaintenance = this.options.transcodeCacheMaintenance.acquireReadLease();
+        const releaseManager = this.options.transcodeManager.acquireReadLease(prepared.path);
+        try {
+          return {
+            prepared,
+            transcoded: await open(prepared.path, 'r'),
+            release: () => {
+              releaseManager();
+              releaseMaintenance();
+            }
+          };
+        } catch (error) {
+          releaseManager();
+          releaseMaintenance();
+          throw error;
+        }
       });
 
-      return { track, prepared, transcoded, gainDb };
+      return { track, prepared, transcoded, gainDb, release };
     } catch (error) {
       if (isNotFoundLike(error)) return null;
       throw error;

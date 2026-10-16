@@ -218,6 +218,7 @@ type PendingTranscode = {
 
 export class TranscodeManager {
   private readonly pending = new Map<string, PendingTranscode>();
+  private readonly readerLeases = new Map<string, number>();
   private readonly queue: HeavyWorkQueue;
   private initialized: Promise<void> | null = null;
 
@@ -249,6 +250,22 @@ export class TranscodeManager {
 
   get pendingCount() {
     return this.queue.runtime.pending;
+  }
+
+  get activeReaderCount() {
+    return [...this.readerLeases.values()].reduce((total, count) => total + count, 0);
+  }
+
+  acquireReadLease(filePath: string): () => void {
+    this.readerLeases.set(filePath, (this.readerLeases.get(filePath) ?? 0) + 1);
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      const count = this.readerLeases.get(filePath) ?? 0;
+      if (count <= 1) this.readerLeases.delete(filePath);
+      else this.readerLeases.set(filePath, count - 1);
+    };
   }
 
   get queueRuntime(): HeavyWorkQueueRuntime {
@@ -417,7 +434,7 @@ export class TranscodeManager {
 
     for (const file of files) {
       if (totalBytes <= this.options.maxCacheBytes) break;
-      if (file.path === keepPath || this.pending.has(file.path)) continue;
+      if (file.path === keepPath || this.pending.has(file.path) || this.readerLeases.has(file.path)) continue;
       await rm(file.path, { force: true });
       totalBytes -= file.size;
     }

@@ -308,3 +308,27 @@ test('TranscodeManager limita o cache removendo o item menos recente', async () 
     await rm(cacheDir, { recursive: true, force: true });
   }
 });
+
+test('eviction preserva transcode com leitor ativo e remove após release', async () => {
+  const cacheDir = await mkdtemp(path.join(os.tmpdir(), 'home-music-transcode-lease-'));
+  const runner: TranscodeRunner = async ({ outputPath }) => { await writeFile(outputPath, Buffer.alloc(40, 2)); };
+  const manager = new TranscodeManager({ cacheDir, command: 'ffmpeg-test', maxCacheBytes: 60, runner });
+  const source = (trackId: string) => ({
+    trackId, sourceSize: 100, sourceMtimeMs: 200, quality: 'balanced' as const,
+    createInput: () => Object.assign(Readable.from(Buffer.from('source')), { fd: 19 })
+  });
+  try {
+    const first = await manager.prepare(source('first'));
+    const release = manager.acquireReadLease(first.path);
+    await manager.prepare(source('second'));
+    assert.equal(manager.activeReaderCount, 1);
+    assert.equal((await readdir(cacheDir)).filter(name => name.endsWith('.m4a')).length, 2);
+    release();
+    release();
+    assert.equal(manager.activeReaderCount, 0);
+    await manager.prepare(source('third'));
+    assert.equal((await readdir(cacheDir)).filter(name => name.endsWith('.m4a')).length, 1);
+  } finally {
+    await rm(cacheDir, { recursive: true, force: true });
+  }
+});

@@ -33,7 +33,8 @@ test('status conta somente arquivos reconhecidos do cache e preserva limite/runt
       entries: 1,
       temporaryEntries: 1,
       active: 1,
-      pending: 2
+      pending: 2,
+      readers: 0
     });
   } finally {
     await rm(cacheDir, { recursive: true, force: true });
@@ -64,7 +65,8 @@ test('clear remove cache final e temporário sem apagar arquivos desconhecidos',
       entries: 0,
       temporaryEntries: 0,
       active: 0,
-      pending: 0
+      pending: 0,
+      readers: 0
     });
     assert.equal(await readFile(path.join(cacheDir, 'nao-remover.txt'), 'utf8'), 'preservado');
   } finally {
@@ -168,5 +170,27 @@ test('diretório de cache apontado por symlink é rejeitado sem remover o alvo',
     assert.equal((await readFile(path.join(target, CACHE_A))).byteLength, 17);
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('read lease impede clear e é liberada de maneira idempotente', async () => {
+  const cacheDir = await mkdtemp(path.join(os.tmpdir(), 'home-music-cache-lease-'));
+  try {
+    await writeFile(path.join(cacheDir, CACHE_A), Buffer.alloc(40));
+    const maintenance = new TranscodeCacheMaintenance({ cacheDir, limitBytes: 512, runtime: () => ({ active: 0, pending: 0 }) });
+    const releaseA = maintenance.acquireReadLease();
+    const releaseB = maintenance.acquireReadLease();
+    assert.equal((await maintenance.status()).readers, 2);
+    await assert.rejects(maintenance.clear(), TranscodeCacheBusyError);
+    releaseA();
+    releaseA();
+    assert.equal((await maintenance.status()).readers, 1);
+    await assert.rejects(maintenance.clear(), TranscodeCacheBusyError);
+    releaseB();
+    const result = await maintenance.clear();
+    assert.equal(result.removedEntries, 1);
+    assert.equal(result.cache.readers, 0);
+  } finally {
+    await rm(cacheDir, { recursive: true, force: true });
   }
 });
