@@ -257,7 +257,11 @@ test('letras distinguem ausência, erro HTTP, retry e não bloqueiam o player', 
   await expect(page.locator('.lyrics-panel')).toHaveCount(0);
 
   status = 'not-found';
-  await page.reload();
+  const beforeNotFound = calls;
+  // Navigate explicitly to the player; reload can restore the library shell.
+  await page.goto('/');
+  await expect(page.locator('.player-screen-immersive')).toBeVisible();
+  await expect.poll(() => calls).toBeGreaterThan(beforeNotFound);
   const panel = page.locator('.lyrics-panel');
   await expect(panel.getByRole('button', { name: 'Letra' })).toBeVisible();
   await panel.getByRole('button', { name: 'Letra' }).click();
@@ -307,10 +311,12 @@ test('letras da faixa anterior não substituem a faixa atual após troca rápida
     });
   });
   try {
-    await page.reload();
+    await page.goto('/');
+    await expect(page.locator('.player-screen-immersive')).toBeVisible();
     await oldStarted;
     await page.getByRole('button', { name: 'Próxima' }).click();
     await expect(page.getByRole('heading', { name: 'E2E Zeta' })).toBeVisible();
+    await expect(page.locator('.player-screen-immersive')).toBeVisible();
     const panel = page.locator('.lyrics-panel');
     await expect(panel.getByRole('button', { name: 'Letra' })).toBeVisible();
     await panel.getByRole('button', { name: 'Letra' }).click();
