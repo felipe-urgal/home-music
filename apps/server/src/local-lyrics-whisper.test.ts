@@ -174,6 +174,57 @@ describe('LocalLyricsWhisperService', () => {
     }
   });
 
+  it('reuses a bounded derived lyrics projection and invalidates on revision or sidecar TTL', async () => {
+    const context = await fixture(null);
+    try {
+      const internals = context.service as unknown as {
+        options: { library: {
+          listTracks: () => Track[];
+          revision: () => number;
+          readEffectiveLyrics: (id: string) => Promise<LyricsResponse | null>;
+        } };
+        now: () => Date;
+      };
+      const synced: LyricsResponse = {
+        source: 'lrc', synchronized: true, lines: [{ time: 1, text: 'sincronizada' }]
+      };
+      let revision = 7;
+      let now = Date.now();
+      let reads = 0;
+      let firstChanged = false;
+      internals.now = () => new Date(now);
+      internals.options.library.revision = () => revision;
+      internals.options.library.listTracks = () => [
+        ...Array.from({ length: 512 }, (_, i) => ({ ...TRACK, id: `synced-${i}` })),
+        { ...TRACK, id: 'missing-one' }, { ...TRACK, id: 'missing-two' }
+      ];
+      internals.options.library.readEffectiveLyrics = async id => {
+        reads++;
+        if (id === 'synced-0' && firstChanged) return null;
+        return id.startsWith('synced-') ? synced : null;
+      };
+
+      const initial = await context.service.eligibleTracks('', 2);
+      assert.deepEqual(initial.tracks.map(track => track.id), ['missing-one', 'missing-two']);
+      const coldReads = reads;
+      assert.equal(coldReads, 514);
+      const warm = await context.service.eligibleTracks('', 2);
+      assert.deepEqual(warm, initial);
+      assert.equal(reads - coldReads, 2, 'synced tracks must be skipped on warm query');
+
+      firstChanged = true;
+      now += 30_001; // sidecar changed without a library scan
+      const refreshed = await context.service.eligibleTracks('', 2);
+      assert.deepEqual(refreshed.tracks.map(track => track.id), ['synced-0', 'missing-one']);
+      const refreshedReads = reads;
+      revision += 1; // override/save or canonical library revision invalidates all hints
+      await context.service.eligibleTracks('', 2);
+      assert.ok(reads - refreshedReads >= 512);
+    } finally {
+      await context.close();
+    }
+  });
+
   it('cancels active work and waits for shutdown before closing resources', async () => {
     const context = await fixture(null);
     try {

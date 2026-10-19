@@ -550,15 +550,19 @@ export function useOfflineDownloads() {
     replaceRecords(ownerUserId, latestRecords.filter(record => record.track.id !== trackId));
   }, [replaceRecords]);
 
+  const reconcileLyricsSnapshot = useCallback(async (trackId: string, ownerUserId: string) => {
+    // Lyrics is derived metadata: an unavailable provider must never roll back audio.
+    const prepared = await prepareOfflineLyricsSnapshot(trackId, ownerUserId);
+    if (prepared && activeUserIdRef.current === ownerUserId
+      && isOfflineTrackReferenced(readReferences(ownerUserId), trackId)) {
+      commitOfflineLyricsSnapshot(prepared);
+    }
+  }, []);
+
   const ensurePhysicalDownload = useCallback(async (track: Track, ownerUserId: string) => {
     if (activeUserIdRef.current !== ownerUserId) return;
     if (readManifest(ownerUserId).some(record => record.track.id === track.id)) {
-      // A presença do áudio não implica que a letra offline esteja atualizada.
-      const prepared = await prepareOfflineLyricsSnapshot(track.id, ownerUserId);
-      if (prepared && activeUserIdRef.current === ownerUserId
-        && isOfflineTrackReferenced(readReferences(ownerUserId), track.id)) {
-        commitOfflineLyricsSnapshot(prepared);
-      }
+      await reconcileLyricsSnapshot(track.id, ownerUserId);
       return;
     }
     if (!isOfflineTrackReferenced(readReferences(ownerUserId), track.id)) return;
@@ -620,6 +624,9 @@ export function useOfflineDownloads() {
           throw error;
         }
 
+        // The first physical download also needs lyrics; subsequent syncs only
+        // reconcile the revision and never rewrite the cached audio response.
+        await reconcileLyricsSnapshot(track.id, ownerUserId);
         try { await navigator.storage?.persist?.(); } catch { /* persistência é best-effort */ }
       } catch (error) {
         throw downloadError(error);
@@ -629,7 +636,7 @@ export function useOfflineDownloads() {
         }
       }
     });
-  }, [replaceRecords]);
+  }, [reconcileLyricsSnapshot, replaceRecords]);
 
   const download = useCallback(async (track: Track) => {
     const ownerUserId = userId;

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { readTrackLyrics } from './lyrics.js';
 import os from 'node:os';
 import path from 'node:path';
@@ -88,6 +88,36 @@ describe('TrackLyricsOverrideStore', () => {
       assert.equal((await readTrackLyrics(path.dirname(databasePath), audio, store.get(trackId)))?.source, 'txt');
       assert.equal(store.clear(trackId), true);
       assert.equal((await readTrackLyrics(path.dirname(databasePath), audio, store.get(trackId)))?.lines[0]?.text, 'sidecar original');
+    } finally {
+      store.close();
+    }
+  });
+
+  it('updates effective override A → B and returns to sidecar without modifying audio', async () => {
+    const { databasePath, trackId } = await databaseWithTrack();
+    const root = path.dirname(databasePath);
+    const audio = path.join(root, 'track.mp3');
+    await writeFile(audio, 'original audio bytes');
+    await writeFile(path.join(root, 'track.lrc'), '[00:01.00]sidecar original');
+    const store = new TrackLyricsOverrideStore(databasePath);
+    try {
+      const save = (text: string) => store.save(trackId, {
+        mode: 'plain', text, origin: 'manual', provider: null, externalId: null, language: null
+      });
+      assert.ok(save('override A'));
+      const initial = await readTrackLyrics(root, audio, store.get(trackId));
+      assert.equal(initial?.lines[0]?.text, 'override A');
+
+      assert.ok(save('override B'));
+      const updated = await readTrackLyrics(root, audio, store.get(trackId));
+      assert.equal(updated?.lines[0]?.text, 'override B');
+      assert.notDeepEqual(updated, initial);
+      assert.equal(await readFile(audio, 'utf8'), 'original audio bytes');
+
+      assert.equal(store.clear(trackId), true);
+      const restored = await readTrackLyrics(root, audio, store.get(trackId));
+      assert.equal(restored?.lines[0]?.text, 'sidecar original');
+      assert.equal(await readFile(audio, 'utf8'), 'original audio bytes');
     } finally {
       store.close();
     }

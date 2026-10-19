@@ -235,3 +235,197 @@ test('controle de coleção offline funciona no layout mobile', async ({ page },
   const horizontalOverflow = await page.locator('.phone-surface').evaluate(element => element.scrollWidth - element.clientWidth);
   expect(horizontalOverflow).toBeLessThanOrEqual(1);
 });
+
+
+test('letras distinguem ausência, erro HTTP, retry e não bloqueiam o player', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium');
+  await login(page);
+  let status: 'missing' | 'not-found' | 'unavailable' | 'available' = 'missing';
+  let calls = 0;
+  await page.route('**/api/tracks/*/lyrics', async route => {
+    calls++;
+    if (status === 'missing') await route.fulfill({ status: 200, contentType: 'application/json', body: 'null' });
+    else if (status === 'available') await route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ source: 'txt', synchronized: false, lines: [{ time: null, text: 'Letra atual B' }] })
+    });
+    else await route.fulfill({ status: status === 'not-found' ? 404 : 503, body: '{}' });
+  });
+
+  await page.reload();
+  await expect.poll(() => calls).toBeGreaterThan(0);
+  await expect(page.getByTestId('desktop-context').getByRole('tab', { name: 'Letra' })).toHaveCount(0);
+
+  status = 'not-found';
+  const beforeNotFound = calls;
+  await page.goto('/');
+  await expect(page.getByTestId('desktop-context')).toBeVisible();
+  await expect.poll(() => calls).toBeGreaterThan(beforeNotFound);
+  const panel = page.getByTestId('desktop-context');
+  await expect(panel.getByRole('tab', { name: 'Letra' })).toBeVisible();
+  await panel.getByRole('tab', { name: 'Letra' }).click();
+  await expect(panel.getByRole('alert')).toContainText('Não foi possível carregar a letra.');
+  await expect(page.getByRole('button', { name: /Tocar próxima: E2E Zeta/ })).toBeEnabled();
+
+  status = 'unavailable';
+  const before = calls;
+  await panel.getByRole('button', { name: 'Tentar novamente' }).click();
+  await expect.poll(() => calls).toBeGreaterThan(before);
+  await expect(panel.getByRole('alert')).toContainText('Não foi possível carregar a letra.');
+  status = 'available';
+  await panel.getByRole('button', { name: 'Tentar novamente' }).click();
+  await expect(panel.getByText('Letra atual B')).toBeVisible();
+  await expect(panel.getByRole('alert')).toHaveCount(0);
+});
+
+test('letras da faixa anterior não substituem a faixa atual após troca rápida', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium');
+  await login(page);
+  const response = await page.context().request.get('/api/library');
+  expect(response.ok()).toBe(true);
+  const library = await response.json() as { tracks: Array<{ id: string; title: string }> };
+  const oldId = library.tracks.find(track => track.title === 'E2E Track')?.id;
+  const nextId = library.tracks.find(track => track.title === 'E2E Zeta')?.id;
+  expect(oldId).toBeTruthy();
+  expect(nextId).toBeTruthy();
+
+  let releaseOld!: () => void;
+  let startedOld!: () => void;
+  const pendingOld = new Promise<void>(resolve => { releaseOld = resolve; });
+  const oldStarted = new Promise<void>(resolve => { startedOld = resolve; });
+  await page.route('**/api/tracks/*/lyrics', async route => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname === `/api/tracks/${encodeURIComponent(oldId!)}/lyrics`) {
+      startedOld();
+      await pendingOld;
+      await route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ source: 'txt', synchronized: false, lines: [{ time: null, text: 'Letra antiga A' }] })
+      });
+    } else await route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: pathname === `/api/tracks/${encodeURIComponent(nextId!)}/lyrics`
+        ? JSON.stringify({ source: 'txt', synchronized: false, lines: [{ time: null, text: 'Letra atual B' }] })
+        : 'null'
+    });
+  });
+  try {
+    await page.goto('/');
+    await expect(page.getByTestId('desktop-context')).toBeVisible();
+    await oldStarted;
+    await page.getByRole('button', { name: /Tocar próxima: E2E Zeta/ }).click();
+    await expect(page.getByRole('heading', { name: 'E2E Zeta' })).toBeVisible();
+    await expect(page.getByTestId('desktop-context')).toBeVisible();
+    const panel = page.getByTestId('desktop-context');
+    await expect(panel.getByRole('tab', { name: 'Letra' })).toBeVisible();
+    await panel.getByRole('tab', { name: 'Letra' }).click();
+    await expect(panel.getByText('Letra atual B')).toBeVisible();
+    const oldResponse = page.waitForResponse(result =>
+      new URL(result.url()).pathname === `/api/tracks/${encodeURIComponent(oldId!)}/lyrics`
+    );
+    releaseOld();
+    await oldResponse;
+    await expect(panel.getByText('Letra atual B')).toBeVisible();
+    await expect(panel.getByText('Letra antiga A')).toHaveCount(0);
+  } finally {
+    releaseOld();
+  }
+});
+
+
+test('áudio offline preserva bytes ao reconciliar override A → B → sidecar e falha de provider', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop-chromium');
+  await login(page);
+  await ensureServiceWorkerControl(page);
+  const { playlist, tracks } = await createCollection(page, testInfo, 1);
+  const trackId = tracks[0]!.id;
+  const revisions = {
+    a: { etag: '"lyrics-override-A"', content: 'Override A' },
+    b: { etag: '"lyrics-override-B"', content: 'Override B' },
+    sidecar: { etag: '"lyrics-sidecar"', content: 'Sidecar original' }
+  };
+  let stage: 'a' | 'b' | 'sidecar' | 'unavailable' = 'a';
+  let lyricsRequests = 0;
+  await page.route('**/api/tracks/*/lyrics', async route => {
+    if (new URL(route.request().url()).pathname !== `/api/tracks/${encodeURIComponent(trackId)}/lyrics`) {
+      await route.continue();
+      return;
+    }
+    lyricsRequests++;
+    if (stage === 'unavailable') {
+      await route.fulfill({ status: 503, body: '{}' });
+      return;
+    }
+    const current = revisions[stage];
+    if (route.request().headers()['if-none-match'] === current.etag) {
+      await route.fulfill({ status: 304, headers: { ETag: current.etag } });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: { ETag: current.etag },
+      body: JSON.stringify({
+        source: stage === 'sidecar' ? 'lrc' : 'txt',
+        synchronized: stage === 'sidecar',
+        lines: [{ time: stage === 'sidecar' ? 1 : null, text: current.content }]
+      })
+    });
+  });
+
+  const snapshot = async () => page.evaluate(async id => {
+    const userId = localStorage.getItem('home-music:offline-user-id:v1');
+    if (!userId) throw new Error('Owner offline indisponível');
+    const encoded = encodeURIComponent(userId);
+    const records = JSON.parse(localStorage.getItem(`home-music:offline-tracks:v2:${encoded}`) ?? '[]') as
+      Array<{ track: { id: string }; downloadedAt: string }>;
+    const persisted = JSON.parse(localStorage.getItem(`home-music:offline-lyrics:v1:${encoded}`) ?? '{}') as
+      Record<string, { revision: string; lyrics: { lines: Array<{ text: string }> } | null }>;
+    const cache = await caches.open(`home-music-offline-audio-v2-${encoded}`);
+    const audio = await cache.match(`/api/tracks/${encodeURIComponent(id)}/stream`);
+    const bytes = audio ? await audio.arrayBuffer() : new ArrayBuffer(0);
+    const digest = await crypto.subtle.digest('SHA-256', bytes);
+    return {
+      revision: persisted[id]?.revision ?? null,
+      text: persisted[id]?.lyrics?.lines[0]?.text ?? null,
+      downloadedAt: records.find(record => record.track.id === id)?.downloadedAt ?? null,
+      audioHash: Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, '0')).join(''),
+      audioSize: bytes.byteLength,
+      entries: (await cache.keys()).length
+    };
+  }, trackId);
+
+  await page.goto(`/library/playlists/${encodeURIComponent(playlist.id)}`);
+  await expect(page.getByRole('button', { name: 'Disponibilizar offline', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Disponibilizar offline', exact: true }).click();
+  await expect.poll(async () => (await snapshot()).revision).toBe(revisions.a.etag);
+  const original = await snapshot();
+  expect(original.text).toBe('Override A');
+  expect(original.audioSize).toBeGreaterThan(0);
+  expect(original.downloadedAt).not.toBeNull();
+  const audioIdentity = ({ downloadedAt, audioHash, audioSize, entries }: typeof original) => ({
+    downloadedAt, audioHash, audioSize, entries
+  });
+
+  for (const [next, expected] of [
+    ['b', 'Override B'], ['sidecar', 'Sidecar original']
+  ] as const) {
+    stage = next;
+    const before = lyricsRequests;
+    await page.getByRole('button', { name: 'Atualizar offline', exact: true }).click();
+    await expect.poll(() => lyricsRequests).toBeGreaterThan(before);
+    await expect.poll(async () => (await snapshot()).revision).toBe(revisions[next].etag);
+    const updated = await snapshot();
+    expect(updated.text).toBe(expected);
+    expect(audioIdentity(updated)).toEqual(audioIdentity(original));
+  }
+
+  stage = 'unavailable';
+  const beforeFailure = lyricsRequests;
+  await page.getByRole('button', { name: 'Atualizar offline', exact: true }).click();
+  await expect.poll(() => lyricsRequests).toBeGreaterThan(beforeFailure);
+  const retained = await snapshot();
+  expect(retained.revision).toBe(revisions.sidecar.etag);
+  expect(retained.text).toBe('Sidecar original');
+  expect(audioIdentity(retained)).toEqual(audioIdentity(original));
+});

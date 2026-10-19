@@ -94,6 +94,7 @@ export async function prepareOfflineLyricsSnapshot(
     const previousRevision = readSnapshots(userId)[trackId]?.revision;
     const response = await apiFetch(`/api/tracks/${encodeURIComponent(trackId)}/lyrics`, {
       cache: 'no-store',
+      signal: AbortSignal.timeout(10_000),
       headers: previousRevision?.startsWith('"lyrics-')
         ? { 'If-None-Match': previousRevision }
         : undefined

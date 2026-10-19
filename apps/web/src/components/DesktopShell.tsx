@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import { useDesktopLayout } from '../useDesktopLayout';
 import type { LibraryTab } from '../useLibraryNavigation';
-import { useTrackLyrics } from '../useTrackLyrics';
+import { useTrackLyricsState } from '../useTrackLyrics';
 import { Artwork } from './Artwork';
 import { useLyricsAutoFollow } from './LyricsPanel';
 
@@ -137,7 +137,8 @@ export function DesktopShell({
   const queueLoadMoreRef = useRef<HTMLDivElement>(null);
   const contextResizeStartRef = useRef<{ x: number; width: number } | null>(null);
   const desktopLayout = useDesktopLayout();
-  const lyrics = useTrackLyrics(current, offlineMode || !desktopLayout);
+  const { lyrics, status: lyricsStatus, retry: retryLyrics } = useTrackLyricsState(current, offlineMode || !desktopLayout);
+  const lyricsTabAvailable = Boolean(current) && (lyricsStatus === 'available' || lyricsStatus === 'loading' || lyricsStatus === 'error');
   const lyricsFollow = useLyricsAutoFollow<HTMLElement>(
     lyrics,
     currentTime,
@@ -155,8 +156,8 @@ export function DesktopShell({
   };
 
   useEffect(() => {
-    if (!lyrics && contextTab === 'lyrics') setContextTab('queue');
-  }, [contextTab, lyrics]);
+    if (!lyricsTabAvailable && contextTab === 'lyrics') setContextTab('queue');
+  }, [contextTab, lyricsTabAvailable]);
 
   useEffect(() => {
     setContextTab('queue');
@@ -389,14 +390,21 @@ export function DesktopShell({
           </section>
         ) : <div className="desktop-context__empty">Nenhuma faixa selecionada.</div>}
 
-        {lyrics && (
+        {lyricsTabAvailable && (
           <div className="desktop-context__tabs" role="tablist" aria-label="Painel contextual">
             <button type="button" role="tab" aria-selected={contextTab === 'queue'} className={contextTab === 'queue' ? 'is-active' : ''} onClick={() => setContextTab('queue')}><ListMusic />Fila</button>
             <button type="button" role="tab" aria-selected={contextTab === 'lyrics'} className={contextTab === 'lyrics' ? 'is-active' : ''} onClick={() => setContextTab('lyrics')}><Music2 />Letra</button>
           </div>
         )}
 
-        {contextTab === 'lyrics' && lyrics ? (
+        {contextTab === 'lyrics' && lyricsStatus === 'error' ? (
+          <section className="desktop-lyrics" role="alert" aria-label="Erro ao carregar letra">
+            <p>Não foi possível carregar a letra.</p>
+            <button type="button" onClick={retryLyrics}>Tentar novamente</button>
+          </section>
+        ) : contextTab === 'lyrics' && lyricsStatus === 'loading' ? (
+          <section className="desktop-lyrics" role="status">Carregando letra…</section>
+        ) : contextTab === 'lyrics' && lyrics ? (
           <section
             ref={lyricsFollow.scrollContainerRef}
             className="desktop-lyrics"

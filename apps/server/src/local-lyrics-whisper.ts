@@ -42,6 +42,9 @@ const MAX_WHISPER_JSON_BYTES = 4 * 1024 * 1024;
 const MAX_JOB_HISTORY = 100;
 const MAX_PREVIEW_LINES = 500;
 const MAX_ELIGIBLE_TRACKS = 100;
+// Derivative hint only: never persists and expires so sidecar edits without a scan recover.
+const ELIGIBILITY_HINT_TTL_MS = 30_000;
+const MAX_ELIGIBILITY_HINTS = 25_000;
 const LANGUAGE_HINT = /^[A-Za-z]{2,3}$/;
 
 type WhisperSegment = {
@@ -356,6 +359,8 @@ export class LocalLyricsWhisperService {
   private readonly jobs = new Map<string, MutableJob>();
   private readonly aborts = new Map<string, AbortController>();
   private readonly running = new Map<string, Promise<void>>();
+  private readonly eligibilityHints = new Map<string, { kind: 'synced' | 'plain' | 'missing'; checkedAt: number }>();
+  private eligibilityRevision: number | null = null;
   private closed = false;
 
   constructor(private readonly options: LocalLyricsWhisperOptions) {
@@ -450,7 +455,15 @@ export class LocalLyricsWhisperService {
     const normalizedQuery = normalizeText(query);
     const safeLimit = Math.max(1, Math.min(MAX_ELIGIBLE_TRACKS, Math.trunc(limit)));
     const tracks = [] as LocalLyricsEligibleTracksResponse['tracks'];
-    // Bounded parallel filesystem reads preserve listing order without an independent index.
+    // The projection is derived from effective lyrics and scoped to the canonical library
+    // revision. Cached synchronized lyrics can be skipped, but actionable results
+    // are always re-read from the authoritative source before being returned.
+    const revision = this.options.library.revision();
+    if (this.eligibilityRevision !== revision) {
+      this.eligibilityHints.clear();
+      this.eligibilityRevision = revision;
+    }
+    const now = this.now().getTime();
     const eligible = this.options.library.listTracks().filter(track =>
       !normalizedQuery || normalizeText(`${track.title} ${track.artist} ${track.album}`).includes(normalizedQuery)
     );
@@ -458,13 +471,25 @@ export class LocalLyricsWhisperService {
     for (let offset = 0; offset < eligible.length && tracks.length < safeLimit; offset += concurrency) {
       if (this.closed) break;
       const batch = eligible.slice(offset, offset + concurrency);
-      const lyrics = await Promise.all(batch.map(track => this.options.library.readEffectiveLyrics(track.id)));
-      for (let index = 0; index < batch.length && tracks.length < safeLimit; index += 1) {
-        const track = batch[index];
-        const currentLyrics = lyrics[index];
-        if (!track) continue;
-        const action = actionForLyrics(currentLyrics ?? null);
-        if (!action) continue;
+      const toRead = batch.filter(track => {
+        const hint = this.eligibilityHints.get(track.id);
+        // A synchronized source is the only case that cannot yield a Whisper job.
+        // TTL also reconciles sidecar edits that did not change the library revision.
+        return !hint || hint.kind !== 'synced'
+          || now < hint.checkedAt || now - hint.checkedAt >= ELIGIBILITY_HINT_TTL_MS;
+      });
+      const lyrics = await Promise.all(toRead.map(track => this.options.library.readEffectiveLyrics(track.id)));
+      const byId = new Map(toRead.map((track, index) => [track.id, lyrics[index] ?? null]));
+      for (const track of batch) {
+        if (!byId.has(track.id)) continue;
+        const currentLyrics = byId.get(track.id) ?? null;
+        if (this.eligibilityHints.size >= MAX_ELIGIBILITY_HINTS) this.eligibilityHints.clear();
+        this.eligibilityHints.set(track.id, {
+          kind: currentLyrics ? currentLyrics.synchronized ? 'synced' : 'plain' : 'missing',
+          checkedAt: now
+        });
+        const action = actionForLyrics(currentLyrics);
+        if (!action || tracks.length >= safeLimit) continue;
         tracks.push({
           id: track.id, title: track.title, artist: track.artist, album: track.album,
           action, currentSynchronized: Boolean(currentLyrics?.synchronized)
