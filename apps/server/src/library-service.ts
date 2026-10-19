@@ -107,8 +107,11 @@ export class LibraryService {
   }
 
   async waitForIdle() {
-    await this.waitForCurrentScan();
-    await this.mutations.waitForIdle();
+    try {
+      await this.waitForCurrentScan();
+    } finally {
+      await this.mutations.waitForIdle();
+    }
   }
 
   get allTracks() {
@@ -613,6 +616,10 @@ export class LibraryService {
       || result.stats.added > 0
       || result.stats.updated > 0
       || result.stats.removed > 0;
+    if (result.stats.removed > 0) this.options.logger.warn(
+      { removed: result.stats.removed, added: result.stats.added },
+      'Músicas removidas do índice. Movimentos externos podem alterar IDs e suas referências pessoais.'
+    );
     const persistence = rootChanged
       ? this.options.database.syncTracks(result.tracks, resolvedRoot, nextScannedAt)
       : this.options.database.applyTrackDelta(result.delta, resolvedRoot, nextScannedAt);
