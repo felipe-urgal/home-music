@@ -330,7 +330,7 @@ app.addHook('onClose', async () => {
 app.addHook('onClose', async () => {
   stopAutomaticRescan();
   library.beginShutdown();
-  await library.waitForIdle();
+  try { await library.waitForIdle(); } catch { /* rescan rejeitado já reportado */ }
   await rhythmScheduler?.stop();
   infrastructure.close();
 });
@@ -496,7 +496,7 @@ if (!shuttingDown) {
       }
     });
     app.log.info(
-      { intervalSeconds: autoRescanIntervalSeconds, initialDelaySeconds: 15 },
+      { intervalSeconds: repeat ? autoRescanIntervalSeconds : null, initialDelaySeconds: 15 },
       repeat ? 'Rescan automático da biblioteca habilitado.' : 'Reconciliação única pós-startup agendada, mesmo com auto-rescan desativado.'
     );
   }
