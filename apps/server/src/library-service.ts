@@ -63,11 +63,20 @@ export class LibraryService {
   private lastError: string | null = null;
   private hydratedSnapshot = false;
   private closing = false;
-  private readonly mutations = new LibraryMutationLock();
+  private readonly mutations: LibraryMutationLock;
   private invalidateMediaCache: () => void = () => undefined;
   private tracksChangedListener: (tracks: readonly IndexedTrack[]) => void = () => undefined;
 
-  constructor(private readonly options: LibraryServiceOptions) {}
+  constructor(private readonly options: LibraryServiceOptions) {
+    this.mutations = new LibraryMutationLock({
+      onWait: waitMs => {
+        if (waitMs >= 250) this.options.logger.warn(
+          { waitMs: Math.round(waitMs), pending: this.mutations.stats().pending },
+          'Mutação aguardou o lock da biblioteca.'
+        );
+      }
+    });
+  }
 
   setMediaCacheInvalidator(invalidate: () => void) {
     this.invalidateMediaCache = invalidate;
