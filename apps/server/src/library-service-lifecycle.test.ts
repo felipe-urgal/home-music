@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rename, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { DatabaseSync } from 'node:sqlite';
 import { HomeMusicDatabase } from './database.js';
 import { LibraryService } from './library-service.js';
 import { TrackAvailabilityStore } from './track-availability-store.js';
@@ -33,7 +34,7 @@ async function fixture() {
     };
   };
   return {
-    musicDir, createService,
+    musicDir, dbPath, createService,
     async close() {
       for (const close of connections.reverse()) close();
       await rm(temp, { recursive: true, force: true });
@@ -210,6 +211,72 @@ test('rename externo altera a identidade baseada no caminho; alteração pela UI
     service.beginShutdown();
     await service.waitForIdle();
     await assert.rejects(service.rescan(), /encerrando/);
+  } finally {
+    await context.close();
+  }
+});
+
+
+test('rename externo remove vínculos pessoais dependentes do ID original conforme FKs SQLite', async () => {
+  const context = await fixture();
+  try {
+    const oldPath = path.join(context.musicDir, 'Original.mp3');
+    await writeFile(oldPath, 'audio');
+    const { service, database } = context.createService();
+    await service.initialize();
+    const oldId = service.allTracks[0].id;
+    const db = new DatabaseSync(context.dbPath);
+    db.exec('PRAGMA foreign_keys = ON;');
+    try {
+      const date = new Date().toISOString();
+      db.prepare(`INSERT INTO users (id, username, username_normalized, password_hash, role, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)`).run('owner-1', 'scanner_user', 'scanner_user', 'synthetic-hash', 'user', date, date);
+      db.prepare(`INSERT INTO playlists (id, name, created_at, updated_at, source, owner_user_id)
+        VALUES (?, ?, ?, ?, ?, ?)`).run('playlist-1', 'Teste', date, date, 'manual', 'owner-1');
+      db.prepare('INSERT INTO playlist_tracks (playlist_id, track_id, position) VALUES (?, ?, ?)').run('playlist-1', oldId, 0);
+      db.prepare('INSERT INTO favorites (user_id, track_id, created_at) VALUES (?, ?, ?)').run('owner-1', oldId, date);
+      db.prepare('INSERT INTO history (user_id, track_id, played_at) VALUES (?, ?, ?)').run('owner-1', oldId, date);
+
+      for (const table of ['playlist_tracks', 'favorites', 'history']) {
+        const count = db.prepare(`SELECT COUNT(*) AS value FROM ${table} WHERE track_id = ?`).get(oldId) as { value: number };
+        assert.equal(count.value, 1, table);
+      }
+
+      await rename(oldPath, path.join(context.musicDir, 'Renomeada.mp3'));
+      const result = await service.rescan();
+      assert.deepEqual([result.added, result.removed], [1, 1]);
+      assert.notEqual(service.allTracks[0].id, oldId);
+      for (const table of ['playlist_tracks', 'favorites', 'history']) {
+        const count = db.prepare(`SELECT COUNT(*) AS value FROM ${table} WHERE track_id = ?`).get(oldId) as { value: number };
+        assert.equal(count.value, 0, `${table} sofre cascade quando o arquivo é renomeado externamente`);
+      }
+      assert.equal((db.prepare('SELECT COUNT(*) AS value FROM playlists').get() as { value: number }).value, 1);
+      assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
+      assert.equal(database.loadTracks().length, 1);
+    } finally {
+      db.close();
+    }
+  } finally {
+    await context.close();
+  }
+});
+
+test('falha na indexação incremental aciona fallback canônico de rescan sem duplicar dados', async () => {
+  const context = await fixture();
+  try {
+    const { service, database } = context.createService();
+    await service.initialize();
+    await writeFile(path.join(context.musicDir, 'Track.mp3'), 'track new');
+    const indexed = await service.updateForPromotedImport({
+      absolutePath: path.join(context.musicDir, 'moved-externally.mp3'),
+      relativePath: 'moved-externally.mp3', size: 12, sha256: 'a'.repeat(64)
+    }, 'job-fallback');
+    assert.equal(indexed, null, 'a promoção alegada não foi encontrada');
+    assert.equal(service.allTracks.length, 1, 'fallback indexa apenas o arquivo real');
+    assert.equal(service.allTracks[0].filePath, path.join(context.musicDir, 'Track.mp3'));
+    assert.equal(database.loadTracks().length, 1);
+    assert.equal(service.status().freshness, 'fresh');
+    assert.deepEqual(database.loadTracks().map(t => t.id), service.allTracks.map(t => t.id));
   } finally {
     await context.close();
   }
