@@ -97,7 +97,7 @@ test('logout ignora AUTH_REQUIRED_EVENT de uma resposta HTTP 401 concorrente', a
   });
   await page.evaluate(() => {
     window.addEventListener('home-music:auth-required', () => {
-      document.body.dataset.authRequiredFrom401 = 'yes';
+      document.body.setAttribute('data-auth-required-from-401', 'yes');
     }, { once: true });
   });
 
