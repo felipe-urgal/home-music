@@ -67,12 +67,12 @@ export function OfflineCollectionControl({
           <button
             className={complete ? 'secondary-action' : 'primary-action'}
             type="button"
-            disabled={!canSync || complete || pausing}
+            disabled={!canSync || pausing}
             onClick={() => run(onSync(target))}
           >
             {pausing ? <LoaderCircle className="download-spinner" aria-hidden="true" /> : <MainIcon state={state} />}
             {complete
-              ? 'Disponível'
+              ? 'Atualizar offline'
               : pausing
                 ? 'Pausando…'
                 : state.status === 'paused'
