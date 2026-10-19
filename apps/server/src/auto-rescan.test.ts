@@ -113,3 +113,34 @@ test('scheduler continua depois de erro e reporta a falha', async () => {
   assert.equal(timers[1].delayMs, 60_000);
   stop();
 });
+
+
+test('reconciliação pós-startup de execução única funciona com interval=0 sem segundo timer', async () => {
+  const timers: Array<{ callback: () => void; delay: number; cleared: boolean; unref(): void }> = [];
+  const clock = {
+    setTimeout(callback: () => void, delay: number) {
+      const entry = { callback, delay, cleared: false, unref() {} };
+      timers.push(entry);
+      return entry as unknown as ReturnType<typeof setTimeout>;
+    },
+    clearTimeout(handle: ReturnType<typeof setTimeout>) {
+      (handle as unknown as (typeof timers)[number]).cleared = true;
+    }
+  };
+  let executions = 0;
+  const stop = startAutoRescanScheduler({
+    intervalMs: 15_000,
+    initialDelayMs: 15_000,
+    repeat: false,
+    clock,
+    run: async () => { executions++; }
+  });
+  assert.equal(timers.length, 1);
+  assert.equal(timers[0].delay, 15_000);
+  timers[0].callback();
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(executions, 1);
+  assert.equal(timers.length, 1);
+  stop();
+});
