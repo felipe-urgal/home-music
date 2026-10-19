@@ -9,7 +9,7 @@ import { resolveLibraryRoot } from './security.js';
 
 test('benchmark rastreável: biblioteca plana vs muito aninhada preserva ordem, limites e confinamento', async t => {
   const temp = await mkdtemp(path.join(os.tmpdir(), 'hm-scanner-traversal-'));
-  const count = 160;
+  const count = 512;
   try {
     const flat = path.join(temp, 'flat');
     const nested = path.join(temp, 'nested');
