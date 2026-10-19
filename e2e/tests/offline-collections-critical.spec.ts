@@ -238,7 +238,7 @@ test('controle de coleção offline funciona no layout mobile', async ({ page },
 
 
 test('letras distinguem ausência, erro HTTP, retry e não bloqueiam o player', async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== 'mobile-chromium');
+  test.skip(testInfo.project.name !== 'desktop-chromium');
   await login(page);
   let status: 'missing' | 'not-found' | 'unavailable' | 'available' = 'missing';
   let calls = 0;
@@ -254,19 +254,18 @@ test('letras distinguem ausência, erro HTTP, retry e não bloqueiam o player', 
 
   await page.reload();
   await expect.poll(() => calls).toBeGreaterThan(0);
-  await expect(page.locator('.lyrics-panel')).toHaveCount(0);
+  await expect(page.getByTestId('desktop-context').getByRole('tab', { name: 'Letra' })).toHaveCount(0);
 
   status = 'not-found';
   const beforeNotFound = calls;
-  // Navigate explicitly to the player; reload can restore the library shell.
   await page.goto('/');
-  await expect(page.locator('.player-screen-immersive')).toBeVisible();
+  await expect(page.getByTestId('desktop-context')).toBeVisible();
   await expect.poll(() => calls).toBeGreaterThan(beforeNotFound);
-  const panel = page.locator('.lyrics-panel');
-  await expect(panel.getByRole('button', { name: 'Letra' })).toBeVisible();
-  await panel.getByRole('button', { name: 'Letra' }).click();
+  const panel = page.getByTestId('desktop-context');
+  await expect(panel.getByRole('tab', { name: 'Letra' })).toBeVisible();
+  await panel.getByRole('tab', { name: 'Letra' }).click();
   await expect(panel.getByRole('alert')).toContainText('Não foi possível carregar a letra.');
-  await expect(page.getByRole('button', { name: 'Próxima' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: /Tocar próxima: E2E Zeta/ })).toBeEnabled();
 
   status = 'unavailable';
   const before = calls;
@@ -280,7 +279,7 @@ test('letras distinguem ausência, erro HTTP, retry e não bloqueiam o player', 
 });
 
 test('letras da faixa anterior não substituem a faixa atual após troca rápida', async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== 'mobile-chromium');
+  test.skip(testInfo.project.name !== 'desktop-chromium');
   await login(page);
   const response = await page.context().request.get('/api/library');
   expect(response.ok()).toBe(true);
@@ -312,14 +311,14 @@ test('letras da faixa anterior não substituem a faixa atual após troca rápida
   });
   try {
     await page.goto('/');
-    await expect(page.locator('.player-screen-immersive')).toBeVisible();
+    await expect(page.getByTestId('desktop-context')).toBeVisible();
     await oldStarted;
-    await page.getByRole('button', { name: 'Próxima' }).click();
+    await page.getByRole('button', { name: /Tocar próxima: E2E Zeta/ }).click();
     await expect(page.getByRole('heading', { name: 'E2E Zeta' })).toBeVisible();
-    await expect(page.locator('.player-screen-immersive')).toBeVisible();
-    const panel = page.locator('.lyrics-panel');
-    await expect(panel.getByRole('button', { name: 'Letra' })).toBeVisible();
-    await panel.getByRole('button', { name: 'Letra' }).click();
+    await expect(page.getByTestId('desktop-context')).toBeVisible();
+    const panel = page.getByTestId('desktop-context');
+    await expect(panel.getByRole('tab', { name: 'Letra' })).toBeVisible();
+    await panel.getByRole('tab', { name: 'Letra' }).click();
     await expect(panel.getByText('Letra atual B')).toBeVisible();
     const oldResponse = page.waitForResponse(result =>
       new URL(result.url()).pathname === `/api/tracks/${encodeURIComponent(oldId!)}/lyrics`
