@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import path from 'node:path';
 import type { AdminScanTrigger, ScanResponse, TrackHotCues, TrackMusicalKey, TrackRhythm, TrackRhythmOverride, TrackWaveform } from '@home-music/shared';
 import { buildAdminLibraryOverview } from './admin-library-overview.js';
 import { runScanWithHistory } from './admin-operation-history-scan.js';
@@ -38,6 +39,16 @@ type LibraryServiceOptions = {
   longJobObservability?: LongJobObservability;
 };
 
+type LibraryFreshness = 'fresh' | 'stale' | 'degraded' | 'unavailable';
+
+function publicScannerError(error: unknown) {
+  const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
+  if (['ENOENT', 'ENOTDIR', 'EACCES', 'EPERM'].includes(code)) {
+    return 'Diretório ou arquivo da biblioteca indisponível para leitura.';
+  }
+  return 'Não foi possível reconciliar a biblioteca. Consulte os logs do servidor.';
+}
+
 export class LibraryService {
   private tracks: IndexedTrack[] = [];
   private tracksById = new Map<string, IndexedTrack>();
@@ -47,6 +58,11 @@ export class LibraryService {
   private readonly instanceId = randomUUID();
   private scannedAt = new Date(0).toISOString();
   private scanPromise: Promise<ScanResponse> | null = null;
+  private freshness: LibraryFreshness = 'unavailable';
+  private lastAttemptAt: string | null = null;
+  private lastError: string | null = null;
+  private hydratedSnapshot = false;
+  private closing = false;
   private readonly mutations = new LibraryMutationLock();
   private invalidateMediaCache: () => void = () => undefined;
   private tracksChangedListener: (tracks: readonly IndexedTrack[]) => void = () => undefined;
@@ -71,6 +87,19 @@ export class LibraryService {
 
   get scanning() {
     return Boolean(this.scanPromise);
+  }
+
+  get needsStartupReconciliation() {
+    return this.hydratedSnapshot;
+  }
+
+  beginShutdown() {
+    this.closing = true;
+  }
+
+  async waitForIdle() {
+    await this.waitForCurrentScan();
+    await this.mutations.waitForIdle();
   }
 
   get allTracks() {
@@ -113,8 +142,14 @@ export class LibraryService {
     return {
       instanceId: this.instanceId,
       scannedAt: this.scannedAt,
+      lastSuccessfulScanAt: this.libraryReady ? this.scannedAt : null,
+      lastAttemptAt: this.lastAttemptAt,
+      lastError: this.lastError,
+      ready: this.libraryReady,
+      freshness: this.freshness,
       scanning: this.scanning,
       revision: this.libraryRevision,
+      mutationQueue: this.mutations.stats(),
       autoRescan: this.automaticRescanStatus()
     };
   }
@@ -333,15 +368,36 @@ export class LibraryService {
       return;
     }
 
-    const resolvedRoot = await resolveLibraryRoot(this.options.musicDir);
     const storedRoot = this.options.database.getMetadata('libraryRoot');
     const storedScannedAt = this.options.database.getMetadata('scannedAt');
+    let resolvedRoot: string;
+    try {
+      resolvedRoot = await resolveLibraryRoot(this.options.musicDir);
+    } catch (error) {
+      // A temporarily unavailable root must not hide a previously persisted,
+      // matching snapshot. Never reuse a snapshot from a different configured path.
+      if (storedRoot && storedScannedAt && storedRoot === path.resolve(this.options.musicDir)) {
+        this.libraryRoot = storedRoot;
+        this.scannedAt = storedScannedAt;
+        this.setTracks(this.options.database.loadTracks());
+        this.libraryReady = true;
+        this.hydratedSnapshot = true;
+        this.freshness = 'degraded';
+        this.lastError = publicScannerError(error);
+        return;
+      }
+      this.freshness = 'unavailable';
+      this.lastError = publicScannerError(error);
+      throw error;
+    }
 
     if (storedRoot === resolvedRoot && storedScannedAt) {
       this.libraryRoot = resolvedRoot;
       this.scannedAt = storedScannedAt;
       this.setTracks(this.options.database.loadTracks());
       this.libraryReady = true;
+      this.hydratedSnapshot = true;
+      this.freshness = 'stale';
       const storedIntegrity = this.options.database.loadLibraryIntegrityStatus(resolvedRoot);
       if (storedIntegrity) hydrateLibraryIntegrityStatus(resolvedRoot, storedIntegrity);
       return;
@@ -351,7 +407,10 @@ export class LibraryService {
   }
 
   rescan(trigger?: AdminScanTrigger) {
+    if (this.closing) return Promise.reject(new Error('O serviço está encerrando; novo scan recusado.'));
     if (this.scanPromise) return this.scanPromise;
+    this.lastAttemptAt = new Date().toISOString();
+    if (this.libraryReady) this.freshness = 'stale';
 
     const run = trigger
       ? () => runScanWithHistory(
@@ -378,7 +437,9 @@ export class LibraryService {
 
     this.scanPromise = run()
       .catch(error => {
-        this.libraryReady = false;
+        // Keep the last committed snapshot available after a failed reconciliation.
+        this.freshness = this.libraryReady ? 'degraded' : 'unavailable';
+        this.lastError = publicScannerError(error);
         throw error;
       })
       .finally(() => {
@@ -392,6 +453,7 @@ export class LibraryService {
   }
 
   async updateForPromotedImport(promoted: PromotedImportFile, jobId: string) {
+    if (this.closing) throw new Error('O serviço está encerrando; importação recusada.');
     return this.mutations.run(async () => {
       try {
         if (!this.options.musicDir) {
@@ -448,7 +510,8 @@ export class LibraryService {
           );
           return this.tracks.find(track => track.filePath === promoted.absolutePath) ?? null;
         } catch (fallbackError) {
-          this.libraryReady = false;
+          this.freshness = this.libraryReady ? 'degraded' : 'unavailable';
+          this.lastError = publicScannerError(fallbackError);
           this.options.logger.error(
             {
               err: fallbackError,
@@ -477,12 +540,16 @@ export class LibraryService {
     nextTracks: IndexedTrack[],
     resolvedRoot: string,
     nextScannedAt: string,
-    changed: boolean
+    changed: boolean,
+    incomplete = false
   ) {
     this.libraryRoot = resolvedRoot;
     this.scannedAt = nextScannedAt;
     this.setTracks(nextTracks);
     this.libraryReady = true;
+    this.hydratedSnapshot = false;
+    this.freshness = incomplete ? 'degraded' : 'fresh';
+    this.lastError = incomplete ? 'Reconciliação parcial: alguns arquivos ou diretórios não puderam ser lidos.' : null;
 
     try {
       this.options.trackAvailability.refresh();
@@ -541,8 +608,13 @@ export class LibraryService {
       ? this.options.database.syncTracks(result.tracks, resolvedRoot, nextScannedAt)
       : this.options.database.applyTrackDelta(result.delta, resolvedRoot, nextScannedAt);
 
-    this.applySnapshot(result.tracks, resolvedRoot, nextScannedAt, changed);
-    this.options.database.saveLibraryIntegrityStatus(resolvedRoot, getLibraryIntegrityStatus());
+    this.applySnapshot(result.tracks, resolvedRoot, nextScannedAt, changed, result.incomplete);
+    try {
+      this.options.database.saveLibraryIntegrityStatus(resolvedRoot, getLibraryIntegrityStatus());
+    } catch (error) {
+      // Integrity status is advisory; never report a committed delta as failed.
+      this.options.logger.warn({ err: error }, 'Falha ao persistir status auxiliar de integridade.');
+    }
     this.options.logger.info(
       {
         persistenceMode: persistence.mode,
