@@ -61,6 +61,14 @@ antes de abri-los, portanto a presença no catálogo não garante que um volume
 temporariamente inacessível possa ser reproduzido. Um scan bem-sucedido limpa
 o estado degradado. Sem snapshot válido, o status permanece indisponível.
 
+O benchmark reproduzível de traversal compara 512 faixas em diretório plano
+com 512 faixas num caminho de 18 níveis, mede o scan inicial e a mediana de
+três scans sem alterações, e valida confinamento, ordenação e ausência de
+reindexação. Execute `npm -w @home-music/server run benchmark:scanner`.
+A implementação mantém enumeração sequencial, pois o benchmark não demonstra
+que adicionar paralelismo ao traversal melhore a situação sob workloads reais;
+apenas stat/metadata são paralelizados com o limite existente de até 8 jobs.
+
 **Identidade de arquivos:** o ID de uma faixa é derivado do caminho relativo
 em `MUSIC_DIR`. Mover ou renomear arquivos diretamente pelo filesystem **não
 preserva o ID** e um rescan pode tratar isso como remoção + adição, com perda
