@@ -235,3 +235,94 @@ test('controle de coleção offline funciona no layout mobile', async ({ page },
   const horizontalOverflow = await page.locator('.phone-surface').evaluate(element => element.scrollWidth - element.clientWidth);
   expect(horizontalOverflow).toBeLessThanOrEqual(1);
 });
+
+
+test('letras distinguem ausência, erro HTTP, retry e não bloqueiam o player', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chromium');
+  await login(page);
+  let status: 'missing' | 'not-found' | 'unavailable' | 'available' = 'missing';
+  let calls = 0;
+  await page.route('**/api/tracks/*/lyrics', async route => {
+    calls++;
+    if (status === 'missing') await route.fulfill({ status: 200, contentType: 'application/json', body: 'null' });
+    else if (status === 'available') await route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ source: 'txt', synchronized: false, lines: [{ time: null, text: 'Letra atual B' }] })
+    });
+    else await route.fulfill({ status: status === 'not-found' ? 404 : 503, body: '{}' });
+  });
+
+  await page.reload();
+  await expect.poll(() => calls).toBeGreaterThan(0);
+  await expect(page.locator('.lyrics-panel')).toHaveCount(0);
+
+  status = 'not-found';
+  await page.reload();
+  const panel = page.locator('.lyrics-panel');
+  await expect(panel.getByRole('button', { name: 'Letra' })).toBeVisible();
+  await panel.getByRole('button', { name: 'Letra' }).click();
+  await expect(panel.getByRole('alert')).toContainText('Não foi possível carregar a letra.');
+  await expect(page.getByRole('button', { name: 'Próxima' })).toBeEnabled();
+
+  status = 'unavailable';
+  const before = calls;
+  await panel.getByRole('button', { name: 'Tentar novamente' }).click();
+  await expect.poll(() => calls).toBeGreaterThan(before);
+  await expect(panel.getByRole('alert')).toContainText('Não foi possível carregar a letra.');
+  status = 'available';
+  await panel.getByRole('button', { name: 'Tentar novamente' }).click();
+  await expect(panel.getByText('Letra atual B')).toBeVisible();
+  await expect(panel.getByRole('alert')).toHaveCount(0);
+});
+
+test('letras da faixa anterior não substituem a faixa atual após troca rápida', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chromium');
+  await login(page);
+  const response = await page.context().request.get('/api/library');
+  expect(response.ok()).toBe(true);
+  const library = await response.json() as { tracks: Array<{ id: string; title: string }> };
+  const oldId = library.tracks.find(track => track.title === 'E2E Track')?.id;
+  const nextId = library.tracks.find(track => track.title === 'E2E Zeta')?.id;
+  expect(oldId).toBeTruthy();
+  expect(nextId).toBeTruthy();
+
+  let releaseOld!: () => void;
+  let startedOld!: () => void;
+  const pendingOld = new Promise<void>(resolve => { releaseOld = resolve; });
+  const oldStarted = new Promise<void>(resolve => { startedOld = resolve; });
+  await page.route('**/api/tracks/*/lyrics', async route => {
+    const pathname = new URL(route.request().url()).pathname;
+    if (pathname === `/api/tracks/${encodeURIComponent(oldId!)}/lyrics`) {
+      startedOld();
+      await pendingOld;
+      await route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ source: 'txt', synchronized: false, lines: [{ time: null, text: 'Letra antiga A' }] })
+      });
+    } else await route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: pathname === `/api/tracks/${encodeURIComponent(nextId!)}/lyrics`
+        ? JSON.stringify({ source: 'txt', synchronized: false, lines: [{ time: null, text: 'Letra atual B' }] })
+        : 'null'
+    });
+  });
+  try {
+    await page.reload();
+    await oldStarted;
+    await page.getByRole('button', { name: 'Próxima' }).click();
+    await expect(page.getByRole('heading', { name: 'E2E Zeta' })).toBeVisible();
+    const panel = page.locator('.lyrics-panel');
+    await expect(panel.getByRole('button', { name: 'Letra' })).toBeVisible();
+    await panel.getByRole('button', { name: 'Letra' }).click();
+    await expect(panel.getByText('Letra atual B')).toBeVisible();
+    const oldResponse = page.waitForResponse(result =>
+      new URL(result.url()).pathname === `/api/tracks/${encodeURIComponent(oldId!)}/lyrics`
+    );
+    releaseOld();
+    await oldResponse;
+    await expect(panel.getByText('Letra atual B')).toBeVisible();
+    await expect(panel.getByText('Letra antiga A')).toHaveCount(0);
+  } finally {
+    releaseOld();
+  }
+});
