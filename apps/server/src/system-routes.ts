@@ -79,13 +79,13 @@ export function registerSystemRoutes(
     const rhythmRuntime = getRhythmAnalysisRuntime?.() ?? null;
     const workQueues = getHeavyWorkRuntime?.();
     return {
+      ...library.status(),
       ready,
       mode: isProduction ? 'production' : 'development',
       uptimeSeconds: Math.floor(process.uptime()),
       webReady,
       libraryReady: library.ready,
       tracks: library.enabledTrackCount,
-      ...library.status(),
       musicDirConfigured,
       authConfigured,
       ffmpeg: {

@@ -40,3 +40,28 @@ test('libera a fila mesmo quando uma mutação falha', async () => {
   const result = await lock.run(async () => 'ok');
   assert.equal(result, 'ok');
 });
+
+
+test('fila de mutações tem limite, métricas de espera e shutdown não perde trabalho aceito', async () => {
+  const waits: number[] = [];
+  const lock = new LibraryMutationLock({ maxPending: 1, onWait: duration => waits.push(duration) });
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const order: string[] = [];
+  const first = lock.run(async () => {
+    order.push('first:start');
+    await gate;
+    order.push('first:end');
+  });
+  await Promise.resolve();
+  const second = lock.run(async () => { order.push('second'); });
+  await Promise.resolve();
+  assert.deepEqual(lock.stats().pending, 1);
+  await assert.rejects(lock.run(async () => undefined), /Fila de mutações/);
+  release();
+  await Promise.all([first, second, lock.waitForIdle()]);
+  assert.deepEqual(order, ['first:start', 'first:end', 'second']);
+  assert.deepEqual([lock.stats().active, lock.stats().pending], [0, 0]);
+  assert.equal(waits.length, 2);
+  assert.ok(waits.every(value => Number.isFinite(value) && value >= 0));
+});

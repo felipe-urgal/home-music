@@ -329,6 +329,8 @@ app.addHook('onClose', async () => {
 
 app.addHook('onClose', async () => {
   stopAutomaticRescan();
+  library.beginShutdown();
+  try { await library.waitForIdle(); } catch { /* rescan rejeitado já reportado */ }
   await rhythmScheduler?.stop();
   infrastructure.close();
 });
@@ -363,6 +365,7 @@ async function shutdown(signal: 'SIGINT' | 'SIGTERM') {
   if (shuttingDown) return;
   shuttingDown = true;
   stopAutomaticRescan();
+  library.beginShutdown();
   app.log.info({ signal }, 'Encerrando Home Music');
 
   const timeout = setTimeout(() => {
@@ -372,13 +375,10 @@ async function shutdown(signal: 'SIGINT' | 'SIGTERM') {
   timeout.unref();
 
   try {
-    if (library.scanning) {
-      app.log.info('Aguardando scan em andamento antes de fechar o SQLite');
-      try {
-        await library.waitForCurrentScan();
-      } catch {
-        // O erro original do scan já será registrado/tratado pelo fluxo chamador.
-      }
+    try {
+      await library.waitForIdle();
+    } catch {
+      // O erro original da operação ativa já foi registrado/tratado.
     }
     await app.close();
   } catch (error) {
@@ -467,11 +467,13 @@ if (ffmpegStatus.available && rhythmAnalysisEnabled) {
 if (!shuttingDown) {
   await app.listen({ port, host });
 
-  if (musicDir && autoRescanIntervalSeconds > 0) {
-    const intervalMs = autoRescanIntervalSeconds * 1000;
+  if (musicDir && (autoRescanIntervalSeconds > 0 || library.needsStartupReconciliation)) {
+    const repeat = autoRescanIntervalSeconds > 0;
+    const intervalMs = repeat ? autoRescanIntervalSeconds * 1000 : 15_000;
     stopAutoRescan = startAutoRescanScheduler({
       intervalMs,
       initialDelayMs: 15_000,
+      repeat,
       run: async () => {
         const result = await library.rescan('automatic');
         if (result.added > 0 || result.updated > 0 || result.removed > 0) {
@@ -494,8 +496,8 @@ if (!shuttingDown) {
       }
     });
     app.log.info(
-      { intervalSeconds: autoRescanIntervalSeconds, initialDelaySeconds: 15 },
-      'Rescan automático da biblioteca habilitado.'
+      { intervalSeconds: repeat ? autoRescanIntervalSeconds : null, initialDelaySeconds: 15 },
+      repeat ? 'Rescan automático da biblioteca habilitado.' : 'Reconciliação única pós-startup agendada, mesmo com auto-rescan desativado.'
     );
   }
 }

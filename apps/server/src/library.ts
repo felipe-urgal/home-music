@@ -62,6 +62,7 @@ export type LibraryScanResult = {
   tracks: IndexedTrack[];
   stats: LibraryScanStats;
   delta: LibraryTrackDelta;
+  incomplete: boolean;
 };
 
 type ScannableFile = {
@@ -160,7 +161,8 @@ async function walk(
   dir: string,
   libraryRoot: string,
   unavailableDirectories: string[],
-  onWarning?: ScanWarningHandler
+  onWarning?: ScanWarningHandler,
+  unavailableFiles: string[] = []
 ): Promise<ScannableFile[]> {
   const candidates = await collectScannablePaths(dir, libraryRoot, unavailableDirectories, onWarning);
   const resolved = await mapWithConcurrency(
@@ -175,6 +177,7 @@ async function walk(
           mtimeMs: safeFile.stat.mtimeMs
         } satisfies ScannableFile;
       } catch (error) {
+        unavailableFiles.push(fullPath);
         onWarning?.(`Arquivo ignorado durante o scan: ${relativeFilePath(libraryRoot, fullPath)}`, error);
         return null;
       }
@@ -414,7 +417,8 @@ export async function scanLibrary(
     beginLibraryIntegrityCheck(libraryRoot);
     try {
       const unavailableDirectories: string[] = [];
-      const files = await walk(libraryRoot, libraryRoot, unavailableDirectories, onWarning);
+      const unavailableFiles: string[] = [];
+      const files = await walk(libraryRoot, libraryRoot, unavailableDirectories, onWarning, unavailableFiles);
       const previousByPath = new Map(previousTracks.map(track => [track.filePath, track]));
       const seenPaths = new Set<string>();
       const tracks: IndexedTrack[] = [];
@@ -472,6 +476,11 @@ export async function scanLibrary(
         scanConcurrency(),
         async task => {
           const metadata = await metadataForFile(libraryRoot, task.file, onWarning, task.detectedTrackId);
+          // Never commit an index assembled from bytes that changed during parsing.
+          const current = await resolveRegularFileInside(libraryRoot, task.file.path);
+          if (current.stat.size !== task.file.size || current.stat.mtimeMs !== task.file.mtimeMs) {
+            throw new Error('Arquivo alterado durante o scan; tente reconciliar novamente.');
+          }
           return task.reusePrevious
             ? task.previous!
             : fromMetadata(libraryRoot, task.file, metadata, task.previous?.id);
@@ -494,7 +503,8 @@ export async function scanLibrary(
           continue;
         }
 
-        const unavailable = unavailableDirectories.some(directory => isPathInside(directory, previous.filePath));
+        const unavailable = unavailableFiles.includes(previous.filePath)
+          || unavailableDirectories.some(directory => isPathInside(directory, previous.filePath));
         if (unavailable) {
           tracks.push(previous);
           stats.unchanged += 1;
@@ -513,7 +523,10 @@ export async function scanLibrary(
 
       tracks.sort(compareTracks);
       finishLibraryIntegrityCheck();
-      return { tracks, stats, delta };
+      return {
+        tracks, stats, delta,
+        incomplete: unavailableDirectories.length > 0 || unavailableFiles.length > 0
+      };
     } catch (error) {
       abortLibraryIntegrityCheck();
       throw error;

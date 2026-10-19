@@ -582,6 +582,12 @@ export type LibraryAutoRescanStatus = {
 export type LibraryStatusResponse = {
   instanceId: string;
   scannedAt: string;
+  lastSuccessfulScanAt?: string | null;
+  lastAttemptAt?: string | null;
+  lastError?: string | null;
+  ready?: boolean;
+  freshness?: 'fresh' | 'stale' | 'degraded' | 'unavailable';
+  mutationQueue?: { active: number; pending: number; lastWaitMs: number };
   scanning: boolean;
   revision: number;
   autoRescan: LibraryAutoRescanStatus;

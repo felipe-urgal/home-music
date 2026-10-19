@@ -28,6 +28,7 @@ type SchedulerClock = {
 type AutoRescanSchedulerOptions = {
   intervalMs: number;
   initialDelayMs: number;
+  repeat?: boolean;
   run: () => Promise<void>;
   onError?: (error: unknown) => void;
   clock?: SchedulerClock;
@@ -41,6 +42,7 @@ const defaultClock: SchedulerClock = {
 export function startAutoRescanScheduler({
   intervalMs,
   initialDelayMs,
+  repeat = true,
   run,
   onError,
   clock = defaultClock
@@ -66,7 +68,7 @@ export function startAutoRescanScheduler({
     } catch (error) {
       onError?.(error);
     } finally {
-      if (!stopped) schedule(intervalMs);
+      if (!stopped && repeat) schedule(intervalMs);
     }
   };
 
