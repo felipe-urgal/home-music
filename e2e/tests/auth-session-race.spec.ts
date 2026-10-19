@@ -74,7 +74,7 @@ test('falha HTTP no logout mantém a sessão e permite tentar novamente', async 
   await expect(page.getByRole('button', { name: /Sair da conta/ }).first()).toBeEnabled();
 });
 
-test('logout ignora 401 tardio de outra requisição e não restaura sessão', async ({ page }) => {
+test('logout ignora AUTH_REQUIRED_EVENT de uma resposta HTTP 401 concorrente', async ({ page }) => {
   await login(page);
   await openAccount(page);
   let releaseLogout!: () => void;
@@ -86,10 +86,33 @@ test('logout ignora 401 tardio de outra requisição e não restaura sessão', a
     await proceed;
     await route.continue();
   });
+  // A consulta de sessões passa pelo apiFetch, que deve emitir AUTH_REQUIRED_EVENT
+  // ao receber um 401 real, em vez de o teste disparar o evento manualmente.
+  await page.route('**/api/auth/sessions', async route => {
+    await route.fulfill({
+      status: 401,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'Sessão expirada.' })
+    });
+  });
+  await page.evaluate(() => {
+    window.addEventListener('home-music:auth-required', () => {
+      document.body.dataset.authRequiredFrom401 = 'yes';
+    }, { once: true });
+  });
 
   await page.getByRole('button', { name: /Sair da conta/ }).first().click();
   await started;
-  await page.evaluate(() => window.dispatchEvent(new Event('home-music:auth-required')));
+  const unauthorized = page.waitForResponse(response =>
+    response.url().endsWith('/api/auth/sessions') && response.status() === 401
+  );
+  await page.getByRole('button', { name: /Outros dispositivos/ }).click();
+  await unauthorized;
+  await expect(page.locator('body')).toHaveAttribute('data-auth-required-from-401', 'yes');
+  // A sessão visual não é apagada enquanto o logout confirmado não terminar.
+  await expect(page.locator('#my-account-title')).toHaveText('Outros dispositivos');
+  await expect(page.getByRole('heading', { name: 'Entrar' })).toHaveCount(0);
+
   releaseLogout();
   await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible();
   await expect(page.locator('#my-account-title')).toHaveCount(0);
