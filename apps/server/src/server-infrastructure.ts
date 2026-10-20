@@ -46,15 +46,40 @@ function resolveLoginAbuseProtectionConfig(options: ServerInfrastructureOptions)
 }
 
 export function createServerInfrastructure(options: ServerInfrastructureOptions) {
+  // Only the composition root owns these long-lived SQLite connections.
+  // A partial startup must release every successfully constructed store.
+  const ownedStores: Array<{ close(): void }> = [];
+  const own = <T extends { close(): void }>(store: T): T => {
+    ownedStores.push(store);
+    return store;
+  };
+  const closeOwnedStores = () => {
+    let failure: unknown;
+    let hasFailure = false;
+    // Release in reverse construction order, even when an individual close throws.
+    while (ownedStores.length > 0) {
+      try {
+        ownedStores.pop()!.close();
+      } catch (error) {
+        if (!hasFailure) {
+          failure = error;
+          hasFailure = true;
+        }
+      }
+    }
+    if (hasFailure) throw failure;
+  };
+
+  try {
   const heavyWorkLimits = options.heavyWorkLimits ?? DEFAULT_HEAVY_WORK_LIMITS;
-  const database = new HomeMusicDatabase(options.databasePath);
-  const trackAvailability = new TrackAvailabilityStore(options.databasePath);
-  const authUsers = new UserAuthStore(options.databasePath);
-  const openSubsonicCredentials = new OpenSubsonicCredentialStore(options.databasePath);
-  const sessions = new PersistentSessionManager(options.databasePath);
-  const accountPasswords = new AccountPasswordService(options.databasePath, sessions);
-  const adminUsers = new AdminUsersService(options.databasePath, sessions);
-  const operationHistory = new AdminOperationHistoryStore(options.databasePath);
+  const database = own(new HomeMusicDatabase(options.databasePath));
+  const trackAvailability = own(new TrackAvailabilityStore(options.databasePath));
+  const authUsers = own(new UserAuthStore(options.databasePath));
+  const openSubsonicCredentials = own(new OpenSubsonicCredentialStore(options.databasePath));
+  const sessions = own(new PersistentSessionManager(options.databasePath));
+  const accountPasswords = own(new AccountPasswordService(options.databasePath, sessions));
+  const adminUsers = own(new AdminUsersService(options.databasePath, sessions));
+  const operationHistory = own(new AdminOperationHistoryStore(options.databasePath));
   const longJobObservability = new LongJobObservability(options.logger);
   const importJobs = new ImportJobQueue({
     maxNonTerminalJobs: heavyWorkLimits.imports.maxNonTerminal,
@@ -111,17 +136,16 @@ export function createServerInfrastructure(options: ServerInfrastructureOptions)
     transcodeCacheMaintenance,
     heavyWorkLimits,
     authConfigured: authUsers.isConfigured(),
-    close() {
-      accountPasswords.close();
-      adminUsers.close();
-      operationHistory.close();
-      sessions.close();
-      openSubsonicCredentials.close();
-      authUsers.close();
-      trackAvailability.close();
-      database.close();
-    }
+    close: closeOwnedStores
   };
+  } catch (error) {
+    try {
+      closeOwnedStores();
+    } catch {
+      // Preserve the initialization failure; all registered stores were attempted.
+    }
+    throw error;
+  }
 }
 
 export type ServerInfrastructure = ReturnType<typeof createServerInfrastructure>;
