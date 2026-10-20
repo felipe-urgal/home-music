@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
+import { SQLITE_BUSY_TIMEOUT_MS } from './sqlite-settings.js';
 import { HomeMusicDatabase } from './database.js';
 import { hashPassword, PASSWORD_MAX_BYTES } from './password.js';
 import { normalizeUsername } from './user-identity.js';
@@ -126,10 +127,9 @@ export async function bootstrapInitialAdmin(
   ensureCurrentSchema(options.databasePath);
 
   const db = new DatabaseSync(options.databasePath);
-  db.exec('PRAGMA foreign_keys = ON;');
-  db.exec('PRAGMA busy_timeout = 5000;');
-
   try {
+    db.exec('PRAGMA foreign_keys = ON;');
+    db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
     const existing = db.prepare('SELECT 1 FROM users LIMIT 1;').get();
     if (existing) {
       claimPendingPersonalDataForExistingUser(db);

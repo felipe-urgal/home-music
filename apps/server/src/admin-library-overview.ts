@@ -1,6 +1,7 @@
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { SQLITE_BUSY_TIMEOUT_MS } from './sqlite-settings.js';
 import { fileURLToPath } from 'node:url';
 import { parseFile } from 'music-metadata';
 import type {
@@ -78,14 +79,21 @@ function scannerFallbackTitle(track: IndexedTrack) {
 
 function defaultDatabaseState(databasePath: string) {
   const db = new DatabaseSync(databasePath, { readOnly: true });
-  db.exec('PRAGMA busy_timeout = 5000;');
-
-  const metadataRows = db.prepare(`
-    SELECT track_id, title, artist, album, album_artist
-    FROM track_metadata_overrides;
-  `).all() as Row[];
-  const coverRows = db.prepare('SELECT track_id FROM track_cover_overrides;').all() as Row[];
-  const hiddenRows = db.prepare('SELECT track_id FROM media_quarantine;').all() as Row[];
+  let metadataRows: Row[];
+  let coverRows: Row[];
+  let hiddenRows: Row[];
+  try {
+    db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
+    metadataRows = db.prepare(`
+      SELECT track_id, title, artist, album, album_artist
+      FROM track_metadata_overrides;
+    `).all() as Row[];
+    coverRows = db.prepare('SELECT track_id FROM track_cover_overrides;').all() as Row[];
+    hiddenRows = db.prepare('SELECT track_id FROM media_quarantine;').all() as Row[];
+  } catch (error) {
+    try { db.close(); } catch { /* Preserve the SQLite initialization error. */ }
+    throw error;
+  }
 
   const metadataOverrides = new Map<string, MetadataOverride>(metadataRows.map(row => [
     stringValue(row.track_id),

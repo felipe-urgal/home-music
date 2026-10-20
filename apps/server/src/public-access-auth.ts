@@ -23,8 +23,8 @@ export async function verifyPublicAccessAdmin(
   if (!identity) return false;
 
   const db = new DatabaseSync(databasePath);
-  db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
   try {
+    db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
     let row: Row | undefined;
     try {
       row = db.prepare(`

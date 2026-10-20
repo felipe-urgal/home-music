@@ -1,0 +1,166 @@
+import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+import test from 'node:test';
+import { buildAdminLibraryOverview } from './admin-library-overview.js';
+import { recoverLocalAdmin } from './admin-recovery.js';
+import { bootstrapInitialAdmin } from './bootstrap-admin.js';
+import { HomeMusicDatabase } from './database.js';
+import { ImportDuplicateDetectionManager } from './import-duplicate-detection.js';
+import { resolveLegacyAuthBinding } from './legacy-auth-binding.js';
+import { LibraryAssistantAutonomyStore } from './library-assistant-autonomy.js';
+import { verifyPublicAccessAdmin } from './public-access-auth.js';
+import { SQLITE_BUSY_TIMEOUT_MS } from './sqlite-settings.js';
+
+async function withDatabase(run: (databasePath: string) => Promise<void>) {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'home-music-sqlite-contention-'));
+  const databasePath = path.join(root, 'home-music.db');
+  try {
+    const initial = new HomeMusicDatabase(databasePath);
+    initial.close();
+    await run(databasePath);
+    const check = new DatabaseSync(databasePath);
+    try {
+      assert.equal(
+        (check.prepare('PRAGMA integrity_check').get() as { integrity_check: string }).integrity_check,
+        'ok'
+      );
+    } finally {
+      check.close();
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+test('assistant autonomy write contention waits a bounded time and fails explicitly', async () => {
+  await withDatabase(async databasePath => {
+    const store = new LibraryAssistantAutonomyStore(databasePath);
+    const lock = new DatabaseSync(databasePath);
+    try {
+      lock.exec('BEGIN IMMEDIATE;');
+      lock.exec('UPDATE library_assistant_autonomy SET pending_revision = 1 WHERE singleton = 1;');
+      const started = Date.now();
+      assert.throws(() => store.setPending(2), (error: unknown) =>
+        error instanceof Error && /SQLITE_BUSY|database is locked/i.test(error.message)
+      );
+      assert.ok(
+        Date.now() - started >= SQLITE_BUSY_TIMEOUT_MS - 1_000,
+        'a conexão deve respeitar o tempo de espera configurado antes de falhar'
+      );
+      lock.exec('ROLLBACK;');
+      store.setPending(2);
+      assert.equal(store.get().pendingRevision, 2);
+    } finally {
+      try { lock.exec('ROLLBACK;'); } catch { /* Transaction may already be closed. */ }
+      lock.close();
+      store.close();
+    }
+  });
+});
+
+test('import duplicate read uses the shared SQLite timeout and retains its read-only mode', async t => {
+  await withDatabase(async databasePath => {
+    const statements: string[] = [];
+    const nativeExec = DatabaseSync.prototype.exec;
+    t.mock.method(DatabaseSync.prototype, 'exec', function (this: DatabaseSync, sql: string) {
+      statements.push(sql);
+      return nativeExec.call(this, sql);
+    });
+    try {
+      const manager = new ImportDuplicateDetectionManager({
+        queue: {
+          get: () => ({ status: 'pending', metadataPreview: {} })
+        },
+        staging: {},
+        validatedLookup: () => ({
+          jobId: 'example',
+          size: 12,
+          sha256: 'f'.repeat(64),
+          validation: {}
+        }),
+        databasePath,
+        musicDir: ''
+      } as unknown as ConstructorParameters<typeof ImportDuplicateDetectionManager>[0]);
+      const result = await manager.detect('example');
+      assert.equal(result.confidence, 'none');
+      const busyStatement = `PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`;
+      assert.ok(statements.includes(busyStatement));
+      assert.ok(statements.includes('PRAGMA query_only = ON;'));
+      assert.ok(statements.indexOf(busyStatement) < statements.indexOf('PRAGMA query_only = ON;'));
+    } finally {
+      t.mock.restoreAll();
+    }
+  });
+});
+
+test('short-lived SQLite helpers close on failure configuring busy_timeout', async t => {
+  const cases = [
+    { label: 'admin recovery', run: (db: string) => recoverLocalAdmin(db, 'admin') },
+    { label: 'public access auth', run: (db: string) => verifyPublicAccessAdmin(db, 'admin', 'long-test-password-at-least-20-characters') },
+    { label: 'legacy auth binding', run: (db: string) => resolveLegacyAuthBinding(db, 'admin') },
+    { label: 'initial admin bootstrap', run: (db: string) =>
+      bootstrapInitialAdmin({ databasePath: db, username: 'admin', password: 'a-sufficiently-long-password' }) }
+  ];
+  for (const scenario of cases) {
+    await t.test(scenario.label, async subtest => {
+      await withDatabase(async dbPath => {
+        const nativeExec = DatabaseSync.prototype.exec;
+        const nativeClose = DatabaseSync.prototype.close;
+        const failure = new Error('injected SQLite pragma failure');
+        const failAt = scenario.label === 'initial admin bootstrap' ? 2 : 1;
+        let busyPragmas = 0;
+        let closes = 0;
+        subtest.mock.method(DatabaseSync.prototype, 'exec', function (this: DatabaseSync, sql: string) {
+          if (sql.includes('PRAGMA busy_timeout')) {
+            busyPragmas++;
+            if (busyPragmas === failAt) throw failure;
+          }
+          return nativeExec.call(this, sql);
+        });
+        subtest.mock.method(DatabaseSync.prototype, 'close', function (this: DatabaseSync) {
+          closes++;
+          return nativeClose.call(this);
+        });
+        try {
+          await assert.rejects(async () => scenario.run(dbPath), error => error === failure);
+          assert.equal(busyPragmas, failAt);
+          assert.equal(closes, failAt, 'cada conexão SQLite aberta deve ser fechada');
+        } finally {
+          subtest.mock.restoreAll();
+        }
+      });
+    });
+  }
+});
+
+test('admin overview closes connection if initial SQLite query fails', async t => {
+  await withDatabase(async databasePath => {
+    const nativePrepare = DatabaseSync.prototype.prepare;
+    const nativeClose = DatabaseSync.prototype.close;
+    const failure = new Error('injected overview query error');
+    let closes = 0;
+    t.mock.method(DatabaseSync.prototype, 'prepare', function (this: DatabaseSync, sql: string) {
+      if (sql.includes('FROM track_metadata_overrides')) throw failure;
+      return nativePrepare.call(this, sql);
+    });
+    t.mock.method(DatabaseSync.prototype, 'close', function (this: DatabaseSync) {
+      closes++;
+      return nativeClose.call(this);
+    });
+    try {
+      await assert.rejects(
+        buildAdminLibraryOverview([], {} as Parameters<typeof buildAdminLibraryOverview>[1], {
+          databasePath,
+          databaseBytes: 0
+        }),
+        error => error === failure
+      );
+      assert.equal(closes, 1);
+    } finally {
+      t.mock.restoreAll();
+    }
+  });
+});
