@@ -44,6 +44,7 @@ import { analyzeTrackWaveform } from './waveform-analysis.js';
 import { RhythmAnalysisScheduler } from './rhythm-analysis-scheduler.js';
 import { sanitizeRequestUrl } from './request-log.js';
 import { createServerInfrastructure } from './server-infrastructure.js';
+import { closeFastifyWithRuntime, createRuntimeShutdown } from './server-shutdown.js';
 import { prepareWebApp, type PreparedWebApp } from './static-web.js';
 import { registerStaticWebRoutes, registerSystemRoutes } from './system-routes.js';
 import { TrackMediaInfrastructure } from './track-media-infrastructure.js';
@@ -327,12 +328,16 @@ app.addHook('onClose', async () => {
   tvRemote.shutdown();
 });
 
+const closeRuntimeResources = createRuntimeShutdown({
+  stopAutoRescan: stopAutomaticRescan,
+  beginLibraryShutdown: () => library.beginShutdown(),
+  waitForLibraryIdle: () => library.waitForIdle(),
+  stopRhythm: async () => { await rhythmScheduler?.stop(); },
+  closeInfrastructure: () => infrastructure.close()
+});
+
 app.addHook('onClose', async () => {
-  stopAutomaticRescan();
-  library.beginShutdown();
-  try { await library.waitForIdle(); } catch { /* rescan rejeitado já reportado */ }
-  await rhythmScheduler?.stop();
-  infrastructure.close();
+  await closeRuntimeResources();
 });
 
 app.setErrorHandler((error, request, reply) => {
@@ -380,7 +385,7 @@ async function shutdown(signal: 'SIGINT' | 'SIGTERM') {
     } catch {
       // O erro original da operação ativa já foi registrado/tratado.
     }
-    await app.close();
+    await closeFastifyWithRuntime(() => app.close(), closeRuntimeResources);
   } catch (error) {
     app.log.error({ err: error }, 'Falha ao encerrar o servidor corretamente');
     process.exitCode = 1;
@@ -400,7 +405,11 @@ if (isProduction) {
       { err: error, webDistPath },
       'Frontend de produção não encontrado. Execute npm run build antes de npm start.'
     );
-    await app.close();
+    try {
+      await closeFastifyWithRuntime(() => app.close(), closeRuntimeResources);
+    } catch (closeError) {
+      app.log.error({ err: closeError }, 'Falha na limpeza após erro de bootstrap.');
+    }
     throw error;
   }
   registerStaticWebRoutes(app, webApp);
