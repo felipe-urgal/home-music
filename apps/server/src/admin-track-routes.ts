@@ -10,6 +10,7 @@ import type {
   TrackMetadataOverridePatch
 } from '@home-music/shared';
 import { registerAdminLibraryNormalizationRoutes } from './admin-library-normalization-routes.js';
+import { closeAll } from './close-resources.js';
 import {
   AdminTrackMutationError,
   AdminTrackMutationService
@@ -222,11 +223,13 @@ export function registerAdminTrackRoutes(
   }
 
   app.addHook('onClose', async () => {
-    coverOverrides.close();
-    metadataNormalization.close();
-    metadataOverrides.close();
-    duplicateReview.close();
-    mutations.close();
+    await closeAll([
+      () => coverOverrides.close(),
+      () => metadataNormalization.close(),
+      () => metadataOverrides.close(),
+      () => duplicateReview.close(),
+      () => mutations.close()
+    ]);
   });
 
   app.addHook('onRequest', async (request, reply) => {

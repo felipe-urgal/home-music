@@ -18,6 +18,7 @@ import {
   LibraryAssistantAutonomyStore
 } from './library-assistant-autonomy.js';
 import { registerLibraryAssistantAutonomyRoutes } from './library-assistant-autonomy-routes.js';
+import { closeAll } from './close-resources.js';
 import {
   LibraryAssistantCompositeReviewService,
   type ResolvedManagedLyricsCandidate
@@ -375,22 +376,24 @@ export function registerLibraryAssistant(
   registerLibraryAssistantAutonomyRoutes(app, autonomy);
   registerLocalLyricsRoutes(app, localLyrics);
   app.addHook('onClose', async () => {
-    await coverFill.close();
-    await localLyrics.close();
-    await autonomy.close();
-    await service.close();
-    review.close();
-    reviewPolicy.close();
-    autonomyStore.close();
-    setActiveTrackLyricsOverrideStore(null);
-    localLyricsCandidates.close();
-    lyricsOverrides.close();
-    coverOverrides.close();
-    metadataOverrides.close();
-    incrementalIndex.close();
-    workQueue.close();
-    fingerprintCache.close();
-    store.close();
+    await closeAll([
+      () => coverFill.close(),
+      () => localLyrics.close(),
+      () => autonomy.close(),
+      () => service.close(),
+      () => review.close(),
+      () => reviewPolicy.close(),
+      () => autonomyStore.close(),
+      () => setActiveTrackLyricsOverrideStore(null),
+      () => localLyricsCandidates.close(),
+      () => lyricsOverrides.close(),
+      () => coverOverrides.close(),
+      () => metadataOverrides.close(),
+      () => incrementalIndex.close(),
+      () => workQueue.close(),
+      () => fingerprintCache.close(),
+      () => store.close()
+    ]);
   });
 
   return service;
