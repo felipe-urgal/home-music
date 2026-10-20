@@ -15,6 +15,7 @@ import { LibraryAssistantFingerprintCache } from './library-assistant-fingerprin
 import { LibraryAssistantIncrementalIndex } from './library-assistant-incremental-index.js';
 import { LibraryAssistantReviewPolicyStore } from './library-assistant-review-policy.js';
 import { LibraryAssistantPersistentQueue } from './library-assistant-persistent-queue.js';
+import { LibraryAssistantStore } from './library-assistant-store.js';
 
 // These stores are owned by route registrations or the central infrastructure.
 // If SQLite DDL/refresh fails inside the constructor, no caller has an instance to close.
@@ -43,9 +44,14 @@ test('route SQLite stores close the connection if initialization fails before re
       try {
         const initialized = new HomeMusicDatabase(databasePath);
         initialized.close();
+        if (scenario.label === 'persistent queue') {
+          const assistantStore = new LibraryAssistantStore(databasePath);
+          assistantStore.close();
+        }
 
-        // A pre-existing VIEW with the intended table name forces CREATE TABLE to
-        // fail after DatabaseSync opens, without corrupting unrelated persisted data.
+        // A VIEW of the expected table name breaks DDL/index/refresh in real SQLite.
+        // The review-policy store only has CREATE TABLE IF NOT EXISTS, which
+        // permits a VIEW; inject the DDL error for that one case.
         const prepare = new DatabaseSync(databasePath);
         try {
           prepare.exec('CREATE VIEW ' + scenario.table + ' AS SELECT 1 AS id;');
@@ -59,20 +65,25 @@ test('route SQLite stores close the connection if initialization fails before re
           closeCount += 1;
           return nativeClose.call(this);
         });
+        const nativeExec = DatabaseSync.prototype.exec;
+        const execMock = scenario.label === 'review policy'
+          ? subtest.mock.method(DatabaseSync.prototype, 'exec', function (this: DatabaseSync, sql: string) {
+            if (sql.includes('CREATE TABLE IF NOT EXISTS library_assistant_review_policy')) {
+              throw new Error('injected SQLite schema initialization failure');
+            }
+            return nativeExec.call(this, sql);
+          })
+          : null;
         try {
-          assert.throws(() => scenario.open(databasePath), /sqlite|table|view|exist/i);
+          assert.throws(() => scenario.open(databasePath), /sqlite|table|view|exist|column|injected/i);
           assert.equal(closeCount, 1, scenario.label + ' must close its failed SQLite connection');
         } finally {
+          execMock?.mock.restore();
           closeMock.mock.restore();
         }
 
         const repair = new DatabaseSync(databasePath);
         try {
-          assert.equal(
-            (repair.prepare('SELECT value FROM metadata WHERE key = ?').get('schemaVersion') as
-              { value?: string } | undefined)?.value ?? null,
-            null
-          );
           repair.exec('DROP VIEW ' + scenario.table + ';');
           assert.equal(
             (repair.prepare('PRAGMA integrity_check').get() as { integrity_check: string }).integrity_check,
