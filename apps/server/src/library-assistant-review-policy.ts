@@ -59,15 +59,24 @@ export class LibraryAssistantReviewPolicyStore {
 
   constructor(databasePath: string) {
     this.db = new DatabaseSync(databasePath);
-    this.db.exec('PRAGMA foreign_keys = ON;');
-    this.db.exec('PRAGMA busy_timeout = 5000;');
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS library_assistant_review_policy (
-        singleton INTEGER PRIMARY KEY NOT NULL CHECK(singleton = 1),
-        policy_json TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-    `);
+    try {
+      this.db.exec('PRAGMA foreign_keys = ON;');
+      this.db.exec('PRAGMA busy_timeout = 5000;');
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS library_assistant_review_policy (
+          singleton INTEGER PRIMARY KEY NOT NULL CHECK(singleton = 1),
+          policy_json TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+      `);
+    } catch (error) {
+      try {
+        this.db.close();
+      } catch {
+        // Preserve the initialization error if SQLite close also fails.
+      }
+      throw error;
+    }
   }
 
   close() {

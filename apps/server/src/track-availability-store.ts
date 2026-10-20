@@ -9,15 +9,24 @@ export class TrackAvailabilityStore {
 
   constructor(databasePath: string) {
     this.db = new DatabaseSync(databasePath);
-    this.db.exec('PRAGMA foreign_keys = ON;');
-    this.db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS track_availability (
-        track_id TEXT PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
-        enabled INTEGER NOT NULL CHECK(enabled IN (0, 1))
-      );
-    `);
-    this.refresh();
+    try {
+      this.db.exec('PRAGMA foreign_keys = ON;');
+      this.db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS track_availability (
+          track_id TEXT PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
+          enabled INTEGER NOT NULL CHECK(enabled IN (0, 1))
+        );
+      `);
+      this.refresh();
+    } catch (error) {
+      try {
+        this.db.close();
+      } catch {
+        // Preserve the initialization error if SQLite close also fails.
+      }
+      throw error;
+    }
   }
 
   close() {

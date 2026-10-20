@@ -103,26 +103,35 @@ export class LocalLyricsCandidateStore {
   constructor(databasePath: string) {
     mkdirSync(path.dirname(databasePath), { recursive: true });
     this.db = new DatabaseSync(databasePath);
-    this.db.exec('PRAGMA foreign_keys = ON;');
-    this.db.exec('PRAGMA busy_timeout = 5000;');
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS local_lyrics_candidates (
-        id TEXT PRIMARY KEY NOT NULL,
-        track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
-        source TEXT NOT NULL CHECK(source IN ('local-transcription', 'local-alignment')),
-        content TEXT NOT NULL CHECK(length(CAST(content AS BLOB)) BETWEEN 1 AND ${MAX_MANAGED_LYRICS_BYTES}),
-        language TEXT,
-        provider_version TEXT,
-        model_label TEXT NOT NULL,
-        base_lyrics_fingerprint TEXT NOT NULL CHECK(length(base_lyrics_fingerprint) = 64),
-        quality_json TEXT NOT NULL,
-        preview_json TEXT NOT NULL,
-        created_at TEXT NOT NULL
-      );
+    try {
+      this.db.exec('PRAGMA foreign_keys = ON;');
+      this.db.exec('PRAGMA busy_timeout = 5000;');
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS local_lyrics_candidates (
+          id TEXT PRIMARY KEY NOT NULL,
+          track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+          source TEXT NOT NULL CHECK(source IN ('local-transcription', 'local-alignment')),
+          content TEXT NOT NULL CHECK(length(CAST(content AS BLOB)) BETWEEN 1 AND ${MAX_MANAGED_LYRICS_BYTES}),
+          language TEXT,
+          provider_version TEXT,
+          model_label TEXT NOT NULL,
+          base_lyrics_fingerprint TEXT NOT NULL CHECK(length(base_lyrics_fingerprint) = 64),
+          quality_json TEXT NOT NULL,
+          preview_json TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        );
 
-      CREATE INDEX IF NOT EXISTS idx_local_lyrics_candidates_created
-      ON local_lyrics_candidates(created_at DESC, id DESC);
-    `);
+        CREATE INDEX IF NOT EXISTS idx_local_lyrics_candidates_created
+        ON local_lyrics_candidates(created_at DESC, id DESC);
+      `);
+    } catch (error) {
+      try {
+        this.db.close();
+      } catch {
+        // Preserve the initialization error if SQLite close also fails.
+      }
+      throw error;
+    }
   }
 
   close() {

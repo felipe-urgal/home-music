@@ -16,19 +16,28 @@ export class LibraryAssistantFingerprintCache {
 
   constructor(databasePath: string) {
     this.db = new DatabaseSync(databasePath);
-    this.db.exec('PRAGMA foreign_keys = ON;');
-    this.db.exec('PRAGMA busy_timeout = 5000;');
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS library_assistant_fingerprint_cache (
-        track_id TEXT PRIMARY KEY NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
-        file_signature TEXT NOT NULL CHECK(length(file_signature) = 64),
-        duration_seconds INTEGER NOT NULL CHECK(duration_seconds > 0 AND duration_seconds <= 86400),
-        fingerprint TEXT NOT NULL CHECK(length(fingerprint) BETWEEN 1 AND ${MAX_FINGERPRINT_CHARS}),
-        updated_at TEXT NOT NULL
-      );
-      CREATE INDEX IF NOT EXISTS idx_library_assistant_fingerprint_cache_updated
-      ON library_assistant_fingerprint_cache(updated_at DESC);
-    `);
+    try {
+      this.db.exec('PRAGMA foreign_keys = ON;');
+      this.db.exec('PRAGMA busy_timeout = 5000;');
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS library_assistant_fingerprint_cache (
+          track_id TEXT PRIMARY KEY NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+          file_signature TEXT NOT NULL CHECK(length(file_signature) = 64),
+          duration_seconds INTEGER NOT NULL CHECK(duration_seconds > 0 AND duration_seconds <= 86400),
+          fingerprint TEXT NOT NULL CHECK(length(fingerprint) BETWEEN 1 AND ${MAX_FINGERPRINT_CHARS}),
+          updated_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_library_assistant_fingerprint_cache_updated
+        ON library_assistant_fingerprint_cache(updated_at DESC);
+      `);
+    } catch (error) {
+      try {
+        this.db.close();
+      } catch {
+        // Preserve the initialization error if SQLite close also fails.
+      }
+      throw error;
+    }
   }
 
   close() {

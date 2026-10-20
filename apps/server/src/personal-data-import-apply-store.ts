@@ -34,11 +34,20 @@ export class PersonalDataImportApplyStore {
 
   constructor(databasePath: string) {
     this.db = new DatabaseSync(databasePath);
-    this.db.exec('PRAGMA foreign_keys = ON;');
-    this.db.exec('PRAGMA journal_mode = WAL;');
-    this.db.exec('PRAGMA synchronous = NORMAL;');
-    this.db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
-    this.ensureLibraryViewsSchema();
+    try {
+      this.db.exec('PRAGMA foreign_keys = ON;');
+      this.db.exec('PRAGMA journal_mode = WAL;');
+      this.db.exec('PRAGMA synchronous = NORMAL;');
+      this.db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
+      this.ensureLibraryViewsSchema();
+    } catch (error) {
+      try {
+        this.db.close();
+      } catch {
+        // Preserve the initialization error if SQLite close also fails.
+      }
+      throw error;
+    }
   }
 
   close() {

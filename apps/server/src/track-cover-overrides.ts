@@ -226,25 +226,34 @@ export class TrackCoverOverrideStore {
   constructor(databasePath: string) {
     mkdirSync(path.dirname(databasePath), { recursive: true });
     this.db = new DatabaseSync(databasePath);
-    this.db.exec('PRAGMA foreign_keys = ON;');
-    this.db.exec('PRAGMA busy_timeout = 5000;');
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS track_cover_overrides (
-        track_id TEXT PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
-        content_type TEXT NOT NULL CHECK(content_type IN ('image/jpeg', 'image/png', 'image/webp')),
-        width INTEGER NOT NULL CHECK(width > 0 AND width <= ${MAX_COVER_DIMENSION}),
-        height INTEGER NOT NULL CHECK(height > 0 AND height <= ${MAX_COVER_DIMENSION}),
-        size_bytes INTEGER NOT NULL CHECK(size_bytes > 0 AND size_bytes <= ${MAX_COVER_OVERRIDE_BYTES}),
-        content_hash TEXT NOT NULL CHECK(length(content_hash) = 64),
-        data BLOB NOT NULL,
-        updated_at TEXT NOT NULL,
-        CHECK(width * height <= ${MAX_COVER_PIXELS})
-      );
+    try {
+      this.db.exec('PRAGMA foreign_keys = ON;');
+      this.db.exec('PRAGMA busy_timeout = 5000;');
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS track_cover_overrides (
+          track_id TEXT PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
+          content_type TEXT NOT NULL CHECK(content_type IN ('image/jpeg', 'image/png', 'image/webp')),
+          width INTEGER NOT NULL CHECK(width > 0 AND width <= ${MAX_COVER_DIMENSION}),
+          height INTEGER NOT NULL CHECK(height > 0 AND height <= ${MAX_COVER_DIMENSION}),
+          size_bytes INTEGER NOT NULL CHECK(size_bytes > 0 AND size_bytes <= ${MAX_COVER_OVERRIDE_BYTES}),
+          content_hash TEXT NOT NULL CHECK(length(content_hash) = 64),
+          data BLOB NOT NULL,
+          updated_at TEXT NOT NULL,
+          CHECK(width * height <= ${MAX_COVER_PIXELS})
+        );
 
-      CREATE INDEX IF NOT EXISTS idx_track_cover_overrides_updated_at
-      ON track_cover_overrides(updated_at DESC);
-    `);
-    this.refresh();
+        CREATE INDEX IF NOT EXISTS idx_track_cover_overrides_updated_at
+        ON track_cover_overrides(updated_at DESC);
+      `);
+      this.refresh();
+    } catch (error) {
+      try {
+        this.db.close();
+      } catch {
+        // Preserve the initialization error if SQLite close also fails.
+      }
+      throw error;
+    }
   }
 
   close() {

@@ -42,24 +42,33 @@ export class LibraryAssistantIncrementalIndex {
 
   constructor(databasePath: string) {
     this.db = new DatabaseSync(databasePath);
-    this.db.exec('PRAGMA foreign_keys = ON;');
-    this.db.exec('PRAGMA busy_timeout = 5000;');
-    this.db.exec('PRAGMA journal_mode = WAL;');
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS library_assistant_analysis_state (
-        capability TEXT NOT NULL CHECK(capability IN ('metadata', 'artwork', 'lyrics')),
-        analyzer_id TEXT NOT NULL,
-        track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
-        premise_signature TEXT NOT NULL,
-        status TEXT NOT NULL CHECK(status IN ('pending', 'matched', 'no_match', 'failed')),
-        run_id TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        PRIMARY KEY(capability, analyzer_id, track_id)
-      );
+    try {
+      this.db.exec('PRAGMA foreign_keys = ON;');
+      this.db.exec('PRAGMA busy_timeout = 5000;');
+      this.db.exec('PRAGMA journal_mode = WAL;');
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS library_assistant_analysis_state (
+          capability TEXT NOT NULL CHECK(capability IN ('metadata', 'artwork', 'lyrics')),
+          analyzer_id TEXT NOT NULL,
+          track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+          premise_signature TEXT NOT NULL,
+          status TEXT NOT NULL CHECK(status IN ('pending', 'matched', 'no_match', 'failed')),
+          run_id TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          PRIMARY KEY(capability, analyzer_id, track_id)
+        );
 
-      CREATE INDEX IF NOT EXISTS idx_library_assistant_analysis_state_run
-      ON library_assistant_analysis_state(run_id, capability);
-    `);
+        CREATE INDEX IF NOT EXISTS idx_library_assistant_analysis_state_run
+        ON library_assistant_analysis_state(run_id, capability);
+      `);
+    } catch (error) {
+      try {
+        this.db.close();
+      } catch {
+        // Preserve the initialization error if SQLite close also fails.
+      }
+      throw error;
+    }
   }
 
   close() {
