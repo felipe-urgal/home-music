@@ -35,6 +35,9 @@ jobs:
       - name: Check (types, unit tests, build)
         run: npm run check
 
+      - name: Backup/restore smoke (temporary SQLite)
+        run: npm run smoke:backup-restore
+
       - name: Security regressions (server filesystem/auth)
         run: npm run test:security
 
