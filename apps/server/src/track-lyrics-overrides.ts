@@ -59,34 +59,43 @@ export class TrackLyricsOverrideStore {
   constructor(databasePath: string) {
     mkdirSync(path.dirname(databasePath), { recursive: true });
     this.db = new DatabaseSync(databasePath);
-    this.db.exec('PRAGMA foreign_keys = ON;');
-    this.db.exec('PRAGMA busy_timeout = 5000;');
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS track_lyrics_overrides (
-        track_id TEXT PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
-        mode TEXT NOT NULL CHECK(mode IN ('plain', 'synced')),
-        content TEXT NOT NULL CHECK(length(CAST(content AS BLOB)) BETWEEN 1 AND ${MAX_MANAGED_LYRICS_BYTES}),
-        origin TEXT NOT NULL CHECK(origin IN ('external', 'manual', 'generated')),
-        provider TEXT,
-        external_id TEXT,
-        language TEXT,
-        updated_at TEXT NOT NULL
-      );
+    try {
+      this.db.exec('PRAGMA foreign_keys = ON;');
+      this.db.exec('PRAGMA busy_timeout = 5000;');
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS track_lyrics_overrides (
+          track_id TEXT PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
+          mode TEXT NOT NULL CHECK(mode IN ('plain', 'synced')),
+          content TEXT NOT NULL CHECK(length(CAST(content AS BLOB)) BETWEEN 1 AND ${MAX_MANAGED_LYRICS_BYTES}),
+          origin TEXT NOT NULL CHECK(origin IN ('external', 'manual', 'generated')),
+          provider TEXT,
+          external_id TEXT,
+          language TEXT,
+          updated_at TEXT NOT NULL
+        );
 
-      CREATE INDEX IF NOT EXISTS idx_track_lyrics_overrides_updated_at
-      ON track_lyrics_overrides(updated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_track_lyrics_overrides_updated_at
+        ON track_lyrics_overrides(updated_at DESC);
 
-      CREATE TABLE IF NOT EXISTS track_lyrics_override_history (
-        track_id TEXT PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
-        mode TEXT NOT NULL CHECK(mode IN ('plain', 'synced')),
-        content TEXT NOT NULL CHECK(length(CAST(content AS BLOB)) BETWEEN 1 AND ${MAX_MANAGED_LYRICS_BYTES}),
-        origin TEXT NOT NULL CHECK(origin IN ('external', 'manual', 'generated')),
-        provider TEXT,
-        external_id TEXT,
-        language TEXT,
-        updated_at TEXT NOT NULL
-      );
-    `);
+        CREATE TABLE IF NOT EXISTS track_lyrics_override_history (
+          track_id TEXT PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
+          mode TEXT NOT NULL CHECK(mode IN ('plain', 'synced')),
+          content TEXT NOT NULL CHECK(length(CAST(content AS BLOB)) BETWEEN 1 AND ${MAX_MANAGED_LYRICS_BYTES}),
+          origin TEXT NOT NULL CHECK(origin IN ('external', 'manual', 'generated')),
+          provider TEXT,
+          external_id TEXT,
+          language TEXT,
+          updated_at TEXT NOT NULL
+        );
+      `);
+    } catch (error) {
+      try {
+        this.db.close();
+      } catch {
+        // Preserve the initialization error if SQLite close also fails.
+      }
+      throw error;
+    }
   }
 
   close() {

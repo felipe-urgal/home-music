@@ -105,44 +105,53 @@ export class LibraryAssistantPersistentQueue {
   constructor(databasePath: string, options: PersistentQueueOptions = {}) {
     mkdirSync(path.dirname(databasePath), { recursive: true });
     this.db = new DatabaseSync(databasePath);
-    this.db.exec('PRAGMA foreign_keys = ON;');
-    this.db.exec('PRAGMA busy_timeout = 5000;');
-    this.db.exec('PRAGMA journal_mode = WAL;');
-    this.now = options.now ?? (() => new Date());
-    this.onRetry = options.onRetry;
+    try {
+      this.db.exec('PRAGMA foreign_keys = ON;');
+      this.db.exec('PRAGMA busy_timeout = 5000;');
+      this.db.exec('PRAGMA journal_mode = WAL;');
+      this.now = options.now ?? (() => new Date());
+      this.onRetry = options.onRetry;
 
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS library_assistant_work_items (
-        run_id TEXT NOT NULL REFERENCES library_assistant_runs(id) ON DELETE CASCADE,
-        analyzer_id TEXT NOT NULL,
-        track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
-        status TEXT NOT NULL CHECK(status IN ('pending', 'processing', 'matched', 'no_match', 'retry', 'failed')),
-        attempts INTEGER NOT NULL DEFAULT 0 CHECK(attempts >= 0),
-        retry_at_ms INTEGER,
-        last_error_code TEXT,
-        last_error_message TEXT,
-        last_error_action TEXT,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        PRIMARY KEY(run_id, analyzer_id, track_id)
-      );
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS library_assistant_work_items (
+          run_id TEXT NOT NULL REFERENCES library_assistant_runs(id) ON DELETE CASCADE,
+          analyzer_id TEXT NOT NULL,
+          track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+          status TEXT NOT NULL CHECK(status IN ('pending', 'processing', 'matched', 'no_match', 'retry', 'failed')),
+          attempts INTEGER NOT NULL DEFAULT 0 CHECK(attempts >= 0),
+          retry_at_ms INTEGER,
+          last_error_code TEXT,
+          last_error_message TEXT,
+          last_error_action TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          PRIMARY KEY(run_id, analyzer_id, track_id)
+        );
 
-      CREATE INDEX IF NOT EXISTS idx_library_assistant_work_ready
-      ON library_assistant_work_items(run_id, status, retry_at_ms, created_at, track_id);
+        CREATE INDEX IF NOT EXISTS idx_library_assistant_work_ready
+        ON library_assistant_work_items(run_id, status, retry_at_ms, created_at, track_id);
 
-      CREATE TABLE IF NOT EXISTS library_assistant_queue_meta (
-        key TEXT PRIMARY KEY NOT NULL,
-        value TEXT NOT NULL
-      );
-    `);
+        CREATE TABLE IF NOT EXISTS library_assistant_queue_meta (
+          key TEXT PRIMARY KEY NOT NULL,
+          value TEXT NOT NULL
+        );
+      `);
 
-    const openedAt = this.now().toISOString();
-    this.db.prepare(`
-      INSERT OR IGNORE INTO library_assistant_queue_meta(key, value)
-      VALUES (?, ?);
-    `).run(QUEUE_INSTALLATION_KEY, openedAt);
+      const openedAt = this.now().toISOString();
+      this.db.prepare(`
+        INSERT OR IGNORE INTO library_assistant_queue_meta(key, value)
+        VALUES (?, ?);
+      `).run(QUEUE_INSTALLATION_KEY, openedAt);
 
-    this.recoverInterruptedWork();
+      this.recoverInterruptedWork();
+    } catch (error) {
+      try {
+        this.db.close();
+      } catch {
+        // Preserve the initialization error if SQLite close also fails.
+      }
+      throw error;
+    }
   }
 
   close() {

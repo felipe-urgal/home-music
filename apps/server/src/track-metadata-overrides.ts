@@ -103,33 +103,42 @@ export class TrackMetadataOverrideStore {
   constructor(databasePath: string) {
     mkdirSync(path.dirname(databasePath), { recursive: true });
     this.db = new DatabaseSync(databasePath);
-    this.db.exec('PRAGMA foreign_keys = ON;');
-    this.db.exec('PRAGMA busy_timeout = 5000;');
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS track_metadata_overrides (
-        track_id TEXT PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
-        title TEXT CHECK(title IS NULL OR (length(trim(title)) BETWEEN 1 AND ${MAX_METADATA_LENGTH})),
-        artist TEXT CHECK(artist IS NULL OR (length(trim(artist)) BETWEEN 1 AND ${MAX_METADATA_LENGTH})),
-        album TEXT CHECK(album IS NULL OR (length(trim(album)) BETWEEN 1 AND ${MAX_METADATA_LENGTH})),
-        album_artist TEXT CHECK(album_artist IS NULL OR (length(trim(album_artist)) BETWEEN 1 AND ${MAX_METADATA_LENGTH})),
-        updated_at TEXT NOT NULL,
-        CHECK(title IS NOT NULL OR artist IS NOT NULL OR album IS NOT NULL OR album_artist IS NOT NULL)
-      );
+    try {
+      this.db.exec('PRAGMA foreign_keys = ON;');
+      this.db.exec('PRAGMA busy_timeout = 5000;');
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS track_metadata_overrides (
+          track_id TEXT PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
+          title TEXT CHECK(title IS NULL OR (length(trim(title)) BETWEEN 1 AND ${MAX_METADATA_LENGTH})),
+          artist TEXT CHECK(artist IS NULL OR (length(trim(artist)) BETWEEN 1 AND ${MAX_METADATA_LENGTH})),
+          album TEXT CHECK(album IS NULL OR (length(trim(album)) BETWEEN 1 AND ${MAX_METADATA_LENGTH})),
+          album_artist TEXT CHECK(album_artist IS NULL OR (length(trim(album_artist)) BETWEEN 1 AND ${MAX_METADATA_LENGTH})),
+          updated_at TEXT NOT NULL,
+          CHECK(title IS NOT NULL OR artist IS NOT NULL OR album IS NOT NULL OR album_artist IS NOT NULL)
+        );
 
-      CREATE INDEX IF NOT EXISTS idx_track_metadata_overrides_updated_at
-      ON track_metadata_overrides(updated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_track_metadata_overrides_updated_at
+        ON track_metadata_overrides(updated_at DESC);
 
-      CREATE TABLE IF NOT EXISTS track_metadata_override_field_revisions (
-        track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
-        field TEXT NOT NULL CHECK(field IN ('title', 'artist', 'album', 'albumArtist')),
-        updated_at TEXT NOT NULL,
-        PRIMARY KEY(track_id, field)
-      );
+        CREATE TABLE IF NOT EXISTS track_metadata_override_field_revisions (
+          track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+          field TEXT NOT NULL CHECK(field IN ('title', 'artist', 'album', 'albumArtist')),
+          updated_at TEXT NOT NULL,
+          PRIMARY KEY(track_id, field)
+        );
 
-      CREATE INDEX IF NOT EXISTS idx_track_metadata_override_field_revisions_updated_at
-      ON track_metadata_override_field_revisions(updated_at DESC);
-    `);
-    this.refresh();
+        CREATE INDEX IF NOT EXISTS idx_track_metadata_override_field_revisions_updated_at
+        ON track_metadata_override_field_revisions(updated_at DESC);
+      `);
+      this.refresh();
+    } catch (error) {
+      try {
+        this.db.close();
+      } catch {
+        // Preserve the initialization error if SQLite close also fails.
+      }
+      throw error;
+    }
   }
 
   close() {
