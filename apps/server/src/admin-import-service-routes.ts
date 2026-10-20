@@ -50,7 +50,8 @@ import {
 } from './import-metadata-preview.js';
 import {
   ImportDuplicateDetectionError,
-  ImportDuplicateDetectionManager
+  ImportDuplicateDetectionManager,
+  type ImportDuplicateLibraryTrack
 } from './import-duplicate-detection.js';
 import {
   ImportSafeDestinationError,
@@ -81,6 +82,7 @@ type RegisterAdminImportRoutesOptions = {
   mediaValidation?: ImportMediaValidationManager;
   metadataPreview?: ImportMetadataPreviewManager;
   duplicateDetection?: ImportDuplicateDetectionManager;
+  libraryTracks?: () => readonly ImportDuplicateLibraryTrack[] | null;
   safeDestination?: ImportSafeDestinationManager;
   automaticFlow?: ImportAutomaticFlowManager | null;
   stagingCleanup?: ImportStagingCleanupManager | null;
@@ -383,7 +385,8 @@ export function registerAdminImportRoutes(
   const duplicateDetection = options.duplicateDetection ?? new ImportDuplicateDetectionManager({
     queue,
     staging: staging(),
-    validatedLookup: jobId => mediaValidation.getValidated(jobId)
+    validatedLookup: jobId => mediaValidation.getValidated(jobId),
+    libraryTracks: options.libraryTracks
   });
   const safeDestination = options.safeDestination ?? new ImportSafeDestinationManager({
     queue,

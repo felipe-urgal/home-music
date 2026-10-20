@@ -273,6 +273,9 @@ const adminLibraryProjection = registerAdminTrackRoutes(app, {
 });
 let importProviderGateway: LibraryAssistantProviderGateway | null = null;
 registerAdminImportRoutes(app, infrastructure.importJobs, {
+  // Reuse the canonical in-memory library once ready; retain the persisted
+  // SQLite read during startup, before the first completed reconciliation.
+  libraryTracks: () => library.ready ? library.allTracks : null,
   getProviderGateway: () => importProviderGateway,
   async onPromoted(promoted, jobId, review) {
     const indexed = await library.updateForPromotedImport(promoted, jobId);

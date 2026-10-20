@@ -66,7 +66,7 @@ type ImportDuplicateDetectionManagerOptions = {
   queue: ImportJobQueue;
   staging: ImportStagingManager;
   validatedLookup: (jobId: string) => ValidatedImportPayload<unknown> | null;
-  libraryTracks?: () => readonly ImportDuplicateLibraryTrack[] | Promise<readonly ImportDuplicateLibraryTrack[]>;
+  libraryTracks?: () => readonly ImportDuplicateLibraryTrack[] | null | Promise<readonly ImportDuplicateLibraryTrack[] | null>;
   hashLibraryTrack?: (track: ImportDuplicateLibraryTrack) => Promise<string | null>;
   databasePath?: string;
   musicDir?: string;
@@ -265,9 +265,8 @@ export class ImportDuplicateDetectionManager {
 
     let tracks: readonly ImportDuplicateLibraryTrack[];
     try {
-      tracks = this.libraryTracks
-        ? await this.libraryTracks()
-        : readLibraryTracks(this.databasePath);
+      const snapshot = this.libraryTracks ? await this.libraryTracks() : null;
+      tracks = snapshot ?? readLibraryTracks(this.databasePath);
     } catch {
       throw new ImportDuplicateDetectionError('library_unavailable', 'Não foi possível consultar a biblioteca para detectar duplicatas.', 503);
     }

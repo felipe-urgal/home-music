@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
 import { ImportJobQueue } from './import-job-queue.js';
 import { ImportStagingManager } from './import-staging.js';
@@ -316,6 +317,119 @@ test('hash comparável indisponível nunca é apresentado como verificação lim
     assert.equal(check.disposition, 'notice');
     assert.equal(check.hashCompared, false);
     assert.equal(check.matches.length, 0);
+  } finally {
+    await rm(item.root, { recursive: true, force: true });
+  }
+});
+
+test('usa snapshot do LibraryService sem abrir conexão SQLite e acompanha nova revisão', async () => {
+  const item = await fixture();
+  try {
+    let snapshot: readonly ImportDuplicateLibraryTrack[] = [];
+    let reads = 0;
+    const manager = new ImportDuplicateDetectionManager({
+      queue: item.queue,
+      staging: item.staging,
+      validatedLookup: () => ({
+        jobId: item.job.id,
+        token: 'validated-token',
+        size: 12,
+        sha256: sha256('nao-igual'),
+        validation: {}
+      }),
+      // This path does not exist: a SQLite open would fail the detection.
+      databasePath: path.join(item.root, 'absent-directory', 'library.db'),
+      libraryTracks: () => {
+        reads++;
+        return snapshot;
+      },
+      musicDir: item.musicDir
+    });
+
+    const before = await manager.detect(item.job.id);
+    assert.equal(before.confidence, 'none');
+    assert.equal(before.matches.length, 0);
+
+    snapshot = [await libraryTrack(item.musicDir, 'existe.flac', Buffer.from('different-audio-content'))];
+    manager.forgetCheck(item.job.id);
+    const after = await manager.detect(item.job.id);
+    assert.equal(after.matches.length, 1);
+    assert.equal(after.matches[0].trackId, snapshot[0].id);
+    assert.equal(after.confidence, 'probable');
+    assert.equal(reads, 2);
+  } finally {
+    await rm(item.root, { recursive: true, force: true });
+  }
+});
+
+test('snapshot nulo antes da biblioteca ficar pronta mantém fallback SQLite read-only', async () => {
+  const item = await fixture();
+  const databasePath = path.join(item.root, 'library.db');
+  try {
+    const db = new DatabaseSync(databasePath);
+    try {
+      db.exec(`
+        CREATE TABLE tracks (
+          id TEXT PRIMARY KEY, file_path TEXT NOT NULL, title TEXT NOT NULL,
+          artist TEXT NOT NULL, album TEXT NOT NULL, album_artist TEXT NOT NULL,
+          duration REAL, format TEXT NOT NULL, file_size INTEGER NOT NULL, mtime_ms REAL NOT NULL
+        );
+        INSERT INTO tracks (id, file_path, title, artist, album, album_artist, duration, format, file_size, mtime_ms)
+        VALUES ('persisted', '/music/track.flac', 'Faixa teste', 'Artista teste',
+                'Álbum teste', 'Artista teste', 180, 'FLAC', 200, 1);
+      `);
+    } finally {
+      db.close();
+    }
+
+    const manager = new ImportDuplicateDetectionManager({
+      queue: item.queue,
+      staging: item.staging,
+      validatedLookup: () => ({
+        jobId: item.job.id,
+        token: 'validated-token',
+        size: 12,
+        sha256: sha256('nao-igual'),
+        validation: {}
+      }),
+      databasePath,
+      libraryTracks: () => null,
+      musicDir: ''
+    });
+    const result = await manager.detect(item.job.id);
+    assert.equal(result.matches.length, 1);
+    assert.equal(result.matches[0].trackId, 'persisted');
+    assert.equal(result.confidence, 'probable');
+  } finally {
+    await rm(item.root, { recursive: true, force: true });
+  }
+});
+
+test('falha do provider de snapshot continua fail-closed sem consultar SQLite alternativo', async () => {
+  const item = await fixture();
+  try {
+    const manager = new ImportDuplicateDetectionManager({
+      queue: item.queue,
+      staging: item.staging,
+      validatedLookup: () => ({
+        jobId: item.job.id,
+        token: 'validated-token',
+        size: 12,
+        sha256: sha256('nao-igual'),
+        validation: {}
+      }),
+      databasePath: path.join(item.root, 'not-created.db'),
+      libraryTracks: () => {
+        throw new Error('injected snapshot failure');
+      }
+    });
+    await assert.rejects(manager.detect(item.job.id), (error: unknown) =>
+      error instanceof Error
+      && 'code' in error
+      && error.code === 'library_unavailable'
+      && !error.message.includes('injected')
+    );
+    assert.equal(manager.get(item.job.id), null);
   } finally {
     await rm(item.root, { recursive: true, force: true });
   }
