@@ -317,77 +317,82 @@ export class LibraryAssistantStore {
   constructor(databasePath: string, options: StoreOptions = {}) {
     mkdirSync(path.dirname(databasePath), { recursive: true });
     this.db = new DatabaseSync(databasePath);
-    this.db.exec('PRAGMA foreign_keys = ON;');
-    this.db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
-    this.db.exec('PRAGMA journal_mode = WAL;');
-    this.now = options.now ?? (() => new Date());
-    this.maxRetainedRuns = Math.max(10, Math.min(2_000, Math.trunc(
-      options.maxRetainedRuns ?? DEFAULT_MAX_RETAINED_RUNS
-    )));
+    try {
+      this.db.exec('PRAGMA foreign_keys = ON;');
+      this.db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
+      this.db.exec('PRAGMA journal_mode = WAL;');
+      this.now = options.now ?? (() => new Date());
+      this.maxRetainedRuns = Math.max(10, Math.min(2_000, Math.trunc(
+        options.maxRetainedRuns ?? DEFAULT_MAX_RETAINED_RUNS
+      )));
 
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS library_assistant_runs (
-        id TEXT PRIMARY KEY NOT NULL,
-        capability TEXT NOT NULL CHECK(capability IN ('metadata', 'artwork', 'lyrics')),
-        status TEXT NOT NULL CHECK(status IN ('queued', 'running', 'completed', 'failed', 'cancelled', 'stale')),
-        library_revision INTEGER NOT NULL CHECK(library_revision >= 0),
-        algorithm_version INTEGER NOT NULL CHECK(algorithm_version > 0),
-        created_at TEXT NOT NULL,
-        started_at TEXT,
-        finished_at TEXT,
-        error_code TEXT,
-        error_message TEXT,
-        error_action TEXT
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS library_assistant_runs (
+          id TEXT PRIMARY KEY NOT NULL,
+          capability TEXT NOT NULL CHECK(capability IN ('metadata', 'artwork', 'lyrics')),
+          status TEXT NOT NULL CHECK(status IN ('queued', 'running', 'completed', 'failed', 'cancelled', 'stale')),
+          library_revision INTEGER NOT NULL CHECK(library_revision >= 0),
+          algorithm_version INTEGER NOT NULL CHECK(algorithm_version > 0),
+          created_at TEXT NOT NULL,
+          started_at TEXT,
+          finished_at TEXT,
+          error_code TEXT,
+          error_message TEXT,
+          error_action TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_library_assistant_runs_created
+        ON library_assistant_runs(created_at DESC, id DESC);
+
+        CREATE TABLE IF NOT EXISTS library_assistant_suggestions (
+          id TEXT PRIMARY KEY NOT NULL,
+          run_id TEXT NOT NULL REFERENCES library_assistant_runs(id) ON DELETE CASCADE,
+          track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+          capability TEXT NOT NULL CHECK(capability IN ('metadata', 'artwork', 'lyrics')),
+          status TEXT NOT NULL CHECK(status IN ('pending', 'review', 'applied', 'rejected', 'stale', 'failed')),
+          confidence TEXT NOT NULL CHECK(confidence IN ('low', 'medium', 'high')),
+          reason_codes_json TEXT NOT NULL,
+          evidence_json TEXT NOT NULL,
+          provenance_json TEXT NOT NULL,
+          target_json TEXT NOT NULL,
+          premise_signature TEXT NOT NULL CHECK(length(premise_signature) = 64),
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_library_assistant_suggestions_run_status
+        ON library_assistant_suggestions(run_id, status, created_at ASC, id ASC);
+
+        CREATE TABLE IF NOT EXISTS library_assistant_provider_cache (
+          provider TEXT NOT NULL,
+          provider_version TEXT NOT NULL,
+          cache_key_hash TEXT NOT NULL CHECK(length(cache_key_hash) = 64),
+          payload_json TEXT NOT NULL,
+          expires_at_ms INTEGER NOT NULL,
+          updated_at TEXT NOT NULL,
+          PRIMARY KEY(provider, provider_version, cache_key_hash)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_library_assistant_provider_cache_expiry
+        ON library_assistant_provider_cache(expires_at_ms ASC);
+      `);
+
+      const interruptedAt = this.now().toISOString();
+      this.db.prepare(`
+        UPDATE library_assistant_runs
+        SET status = 'failed', finished_at = ?, error_code = ?, error_message = ?, error_action = ?
+        WHERE status IN ('queued', 'running');
+      `).run(
+        interruptedAt,
+        INTERRUPTED_ERROR.code,
+        INTERRUPTED_ERROR.message,
+        INTERRUPTED_ERROR.action
       );
-
-      CREATE INDEX IF NOT EXISTS idx_library_assistant_runs_created
-      ON library_assistant_runs(created_at DESC, id DESC);
-
-      CREATE TABLE IF NOT EXISTS library_assistant_suggestions (
-        id TEXT PRIMARY KEY NOT NULL,
-        run_id TEXT NOT NULL REFERENCES library_assistant_runs(id) ON DELETE CASCADE,
-        track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
-        capability TEXT NOT NULL CHECK(capability IN ('metadata', 'artwork', 'lyrics')),
-        status TEXT NOT NULL CHECK(status IN ('pending', 'review', 'applied', 'rejected', 'stale', 'failed')),
-        confidence TEXT NOT NULL CHECK(confidence IN ('low', 'medium', 'high')),
-        reason_codes_json TEXT NOT NULL,
-        evidence_json TEXT NOT NULL,
-        provenance_json TEXT NOT NULL,
-        target_json TEXT NOT NULL,
-        premise_signature TEXT NOT NULL CHECK(length(premise_signature) = 64),
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_library_assistant_suggestions_run_status
-      ON library_assistant_suggestions(run_id, status, created_at ASC, id ASC);
-
-      CREATE TABLE IF NOT EXISTS library_assistant_provider_cache (
-        provider TEXT NOT NULL,
-        provider_version TEXT NOT NULL,
-        cache_key_hash TEXT NOT NULL CHECK(length(cache_key_hash) = 64),
-        payload_json TEXT NOT NULL,
-        expires_at_ms INTEGER NOT NULL,
-        updated_at TEXT NOT NULL,
-        PRIMARY KEY(provider, provider_version, cache_key_hash)
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_library_assistant_provider_cache_expiry
-      ON library_assistant_provider_cache(expires_at_ms ASC);
-    `);
-
-    const interruptedAt = this.now().toISOString();
-    this.db.prepare(`
-      UPDATE library_assistant_runs
-      SET status = 'failed', finished_at = ?, error_code = ?, error_message = ?, error_action = ?
-      WHERE status IN ('queued', 'running');
-    `).run(
-      interruptedAt,
-      INTERRUPTED_ERROR.code,
-      INTERRUPTED_ERROR.message,
-      INTERRUPTED_ERROR.action
-    );
-    this.pruneExpiredProviderCache(this.now().getTime());
+      this.pruneExpiredProviderCache(this.now().getTime());
+    } catch (error) {
+      try { this.db.close(); } catch { /* Preserve the initialization error. */ }
+      throw error;
+    }
   }
 
   close() {

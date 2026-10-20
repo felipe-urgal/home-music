@@ -178,25 +178,30 @@ export class LibraryDuplicateReviewStore {
     this.isHidden = options.isHidden ?? (() => false);
     this.now = options.now ?? (() => new Date());
     this.db = new DatabaseSync(options.databasePath);
-    this.db.exec('PRAGMA foreign_keys = ON;');
-    this.db.exec('PRAGMA busy_timeout = 5000;');
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS library_duplicate_ignores (
-        track_a_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
-        track_b_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
-        created_at TEXT NOT NULL,
-        PRIMARY KEY (track_a_id, track_b_id),
-        CHECK (track_a_id < track_b_id)
-      );
+    try {
+      this.db.exec('PRAGMA foreign_keys = ON;');
+      this.db.exec('PRAGMA busy_timeout = 5000;');
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS library_duplicate_ignores (
+          track_a_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+          track_b_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+          created_at TEXT NOT NULL,
+          PRIMARY KEY (track_a_id, track_b_id),
+          CHECK (track_a_id < track_b_id)
+        );
 
-      CREATE TABLE IF NOT EXISTS library_duplicate_review_snapshot (
-        id INTEGER PRIMARY KEY CHECK (id = 1),
-        checked_at TEXT NOT NULL,
-        library_fingerprint TEXT NOT NULL,
-        hash_complete INTEGER NOT NULL CHECK(hash_complete IN (0, 1)),
-        candidates_json TEXT NOT NULL
-      );
-    `);
+        CREATE TABLE IF NOT EXISTS library_duplicate_review_snapshot (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          checked_at TEXT NOT NULL,
+          library_fingerprint TEXT NOT NULL,
+          hash_complete INTEGER NOT NULL CHECK(hash_complete IN (0, 1)),
+          candidates_json TEXT NOT NULL
+        );
+      `);
+    } catch (error) {
+      try { this.db.close(); } catch { /* Preserve the initialization error. */ }
+      throw error;
+    }
   }
 
   close() {

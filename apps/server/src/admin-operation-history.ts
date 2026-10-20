@@ -330,60 +330,65 @@ export class AdminOperationHistoryStore {
   constructor(databasePath: string, options: OperationHistoryOptions = {}) {
     mkdirSync(path.dirname(databasePath), { recursive: true });
     this.db = new DatabaseSync(databasePath);
-    this.db.exec('PRAGMA busy_timeout = 5000;');
-    this.db.exec('PRAGMA journal_mode = WAL;');
-    this.now = options.now ?? (() => new Date());
-    this.createId = options.createId ?? randomUUID;
-    this.maxRetainedOperations = Math.max(1, Math.min(5_000, Math.trunc(options.maxRetainedOperations ?? DEFAULT_MAX_RETAINED_OPERATIONS)));
+    try {
+      this.db.exec('PRAGMA busy_timeout = 5000;');
+      this.db.exec('PRAGMA journal_mode = WAL;');
+      this.now = options.now ?? (() => new Date());
+      this.createId = options.createId ?? randomUUID;
+      this.maxRetainedOperations = Math.max(1, Math.min(5_000, Math.trunc(options.maxRetainedOperations ?? DEFAULT_MAX_RETAINED_OPERATIONS)));
 
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS admin_operation_history (
-        id TEXT PRIMARY KEY NOT NULL,
-        kind TEXT NOT NULL CHECK(kind IN ('scan', 'import')),
-        status TEXT NOT NULL CHECK(status IN ('pending', 'running', 'completed', 'failed', 'cancelled')),
-        label TEXT NOT NULL CHECK(length(label) BETWEEN 1 AND ${MAX_LABEL_LENGTH}),
-        created_at TEXT NOT NULL,
-        started_at TEXT,
-        finished_at TEXT,
-        scan_trigger TEXT CHECK(scan_trigger IS NULL OR scan_trigger IN ('manual', 'automatic')),
-        import_source_type TEXT CHECK(import_source_type IS NULL OR import_source_type IN ('upload', 'url', 'provider')),
-        import_provider TEXT,
-        counts_json TEXT,
-        error_message TEXT,
-        error_action TEXT,
-        can_retry INTEGER NOT NULL DEFAULT 0 CHECK(can_retry IN (0, 1)),
-        import_retry_of_id TEXT,
-        import_root_id TEXT,
-        import_attempt INTEGER,
-        import_failure_disposition TEXT
-      );
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS admin_operation_history (
+          id TEXT PRIMARY KEY NOT NULL,
+          kind TEXT NOT NULL CHECK(kind IN ('scan', 'import')),
+          status TEXT NOT NULL CHECK(status IN ('pending', 'running', 'completed', 'failed', 'cancelled')),
+          label TEXT NOT NULL CHECK(length(label) BETWEEN 1 AND ${MAX_LABEL_LENGTH}),
+          created_at TEXT NOT NULL,
+          started_at TEXT,
+          finished_at TEXT,
+          scan_trigger TEXT CHECK(scan_trigger IS NULL OR scan_trigger IN ('manual', 'automatic')),
+          import_source_type TEXT CHECK(import_source_type IS NULL OR import_source_type IN ('upload', 'url', 'provider')),
+          import_provider TEXT,
+          counts_json TEXT,
+          error_message TEXT,
+          error_action TEXT,
+          can_retry INTEGER NOT NULL DEFAULT 0 CHECK(can_retry IN (0, 1)),
+          import_retry_of_id TEXT,
+          import_root_id TEXT,
+          import_attempt INTEGER,
+          import_failure_disposition TEXT
+        );
 
-      CREATE INDEX IF NOT EXISTS idx_admin_operation_history_created
-      ON admin_operation_history(created_at DESC, id DESC);
+        CREATE INDEX IF NOT EXISTS idx_admin_operation_history_created
+        ON admin_operation_history(created_at DESC, id DESC);
 
-      CREATE INDEX IF NOT EXISTS idx_admin_operation_history_kind_status
-      ON admin_operation_history(kind, status, created_at DESC);
-    `);
+        CREATE INDEX IF NOT EXISTS idx_admin_operation_history_kind_status
+        ON admin_operation_history(kind, status, created_at DESC);
+      `);
 
-    ensureHistoryColumn(this.db, 'import_retry_of_id', 'TEXT');
-    ensureHistoryColumn(this.db, 'import_root_id', 'TEXT');
-    ensureHistoryColumn(this.db, 'import_attempt', 'INTEGER');
-    ensureHistoryColumn(this.db, 'import_failure_disposition', "TEXT NOT NULL DEFAULT 'none'");
-    this.db.exec(`
-      CREATE INDEX IF NOT EXISTS idx_admin_operation_history_retry_parent
-      ON admin_operation_history(import_retry_of_id);
+      ensureHistoryColumn(this.db, 'import_retry_of_id', 'TEXT');
+      ensureHistoryColumn(this.db, 'import_root_id', 'TEXT');
+      ensureHistoryColumn(this.db, 'import_attempt', 'INTEGER');
+      ensureHistoryColumn(this.db, 'import_failure_disposition', "TEXT NOT NULL DEFAULT 'none'");
+      this.db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_admin_operation_history_retry_parent
+        ON admin_operation_history(import_retry_of_id);
 
-      UPDATE admin_operation_history
-      SET import_root_id = id,
-          import_attempt = 1,
-          import_failure_disposition = CASE WHEN status = 'failed' THEN 'definitive' ELSE 'none' END
-      WHERE kind = 'import'
-        AND (import_root_id IS NULL OR import_attempt IS NULL);
-    `);
+        UPDATE admin_operation_history
+        SET import_root_id = id,
+            import_attempt = 1,
+            import_failure_disposition = CASE WHEN status = 'failed' THEN 'definitive' ELSE 'none' END
+        WHERE kind = 'import'
+          AND (import_root_id IS NULL OR import_attempt IS NULL);
+      `);
 
-    this.recoverInterruptedOperations();
-    this.recoverOrphanRetryClaims();
-    this.trimRetained();
+      this.recoverInterruptedOperations();
+      this.recoverOrphanRetryClaims();
+      this.trimRetained();
+    } catch (error) {
+      try { this.db.close(); } catch { /* Preserve the initialization error. */ }
+      throw error;
+    }
   }
 
   close() {
