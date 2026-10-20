@@ -4,6 +4,7 @@ import { open } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { SQLITE_BUSY_TIMEOUT_MS } from './sqlite-settings.js';
 import type {
   AdminLibraryDuplicateReason,
   ImportJob,
@@ -192,6 +193,7 @@ function trackFromRow(row: Record<string, unknown>): ImportDuplicateLibraryTrack
 function readLibraryTracks(databasePath: string): ImportDuplicateLibraryTrack[] {
   const db = new DatabaseSync(databasePath, { open: true, readOnly: true });
   try {
+    db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
     db.exec('PRAGMA query_only = ON;');
     const rows = db.prepare(`
       SELECT id, file_path, title, artist, album, album_artist,

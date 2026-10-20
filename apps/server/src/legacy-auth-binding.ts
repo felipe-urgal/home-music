@@ -19,9 +19,8 @@ function validSessionUserId(value: unknown): value is string {
 
 export function resolveLegacyAuthBinding(databasePath: string, username: string): LegacyAuthBinding {
   const db = new DatabaseSync(databasePath);
-  db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
-
   try {
+    db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
     const countRow = db.prepare('SELECT COUNT(*) AS count FROM users;').get() as Row | undefined;
     const count = Number(countRow?.count ?? 0);
     if (!Number.isFinite(count)) return { status: 'blocked' };

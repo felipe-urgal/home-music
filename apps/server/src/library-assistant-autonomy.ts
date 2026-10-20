@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
+import { SQLITE_BUSY_TIMEOUT_MS } from './sqlite-settings.js';
 import { isLibraryAssistantAutoApplicable, type LibraryAssistantDecision, type LibraryAssistantRun } from '@home-music/shared/library-assistant';
 import type { LibraryService } from './library-service.js';
 import type { LibraryAssistantService } from './library-assistant-service.js';
@@ -24,6 +25,7 @@ export class LibraryAssistantAutonomyStore {
   constructor(databasePath: string) {
     this.db = new DatabaseSync(databasePath);
     try {
+      this.db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
       this.db.exec(`CREATE TABLE IF NOT EXISTS library_assistant_autonomy (
         singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
         enabled INTEGER NOT NULL DEFAULT 0,

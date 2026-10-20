@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
+import { SQLITE_BUSY_TIMEOUT_MS } from './sqlite-settings.js';
 import { hashPassword } from './password.js';
 import { normalizeUsername } from './user-identity.js';
 
@@ -23,9 +24,8 @@ export async function recoverLocalAdmin(
   if (!identity) return { ok: false, error: 'invalid-username' };
 
   const db = new DatabaseSync(databasePath);
-  db.exec('PRAGMA busy_timeout = 5000;');
-
   try {
+    db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
     let row: Row | undefined;
     try {
       row = db.prepare(`
