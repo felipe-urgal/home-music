@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
+import { SQLITE_BUSY_TIMEOUT_MS } from './sqlite-settings.js';
 import { PASSWORD_MAX_BYTES, verifyPassword } from './password.js';
 import { normalizeUsername } from './user-identity.js';
 
@@ -22,7 +23,7 @@ export async function verifyPublicAccessAdmin(
   if (!identity) return false;
 
   const db = new DatabaseSync(databasePath);
-  db.exec('PRAGMA busy_timeout = 5000;');
+  db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
   try {
     let row: Row | undefined;
     try {

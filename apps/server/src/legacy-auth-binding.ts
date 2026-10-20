@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
+import { SQLITE_BUSY_TIMEOUT_MS } from './sqlite-settings.js';
 import { normalizeUsername } from './user-identity.js';
 
 const INTERNAL_BINDING_STATE = 'HOME_MUSIC_INTERNAL_LEGACY_BINDING_STATE';
@@ -18,7 +19,7 @@ function validSessionUserId(value: unknown): value is string {
 
 export function resolveLegacyAuthBinding(databasePath: string, username: string): LegacyAuthBinding {
   const db = new DatabaseSync(databasePath);
-  db.exec('PRAGMA busy_timeout = 5000;');
+  db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
 
   try {
     const countRow = db.prepare('SELECT COUNT(*) AS count FROM users;').get() as Row | undefined;

@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
+import { SQLITE_BUSY_TIMEOUT_MS } from './sqlite-settings.js';
 import type { AuthenticatedUser, UserRole } from '@home-music/shared';
 
 const MAX_SESSION_USER_ID_LENGTH = 128;
@@ -28,7 +29,7 @@ export class UserAuthStore {
 
   constructor(databasePath: string) {
     this.db = new DatabaseSync(databasePath);
-    this.db.exec('PRAGMA busy_timeout = 5000;');
+    this.db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
   }
 
   close() {

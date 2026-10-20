@@ -1,6 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { SQLITE_BUSY_TIMEOUT_MS } from './sqlite-settings.js';
 import {
   LIBRARY_ASSISTANT_ALGORITHM_VERSION,
   LIBRARY_ASSISTANT_CONTRACT_VERSION,
@@ -317,7 +318,7 @@ export class LibraryAssistantStore {
     mkdirSync(path.dirname(databasePath), { recursive: true });
     this.db = new DatabaseSync(databasePath);
     this.db.exec('PRAGMA foreign_keys = ON;');
-    this.db.exec('PRAGMA busy_timeout = 5000;');
+    this.db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
     this.db.exec('PRAGMA journal_mode = WAL;');
     this.now = options.now ?? (() => new Date());
     this.maxRetainedRuns = Math.max(10, Math.min(2_000, Math.trunc(
