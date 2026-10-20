@@ -6,6 +6,7 @@ import {
 } from './media-file-move.js';
 import { MediaQuarantineOperationError, MediaQuarantineStore } from './media-quarantine.js';
 import { UnsafeLibraryPathError } from './security.js';
+import { closeAllSync } from './close-resources.js';
 
 export const PERMANENT_DELETE_CONFIRMATION = 'EXCLUIR PERMANENTEMENTE' as const;
 
@@ -60,12 +61,23 @@ export class AdminTrackMutationService {
 
   constructor(private readonly options: AdminTrackMutationServiceOptions) {
     this.quarantine = new MediaQuarantineStore(options.databasePath, options.musicDir);
-    this.fileMoves = new MediaFileMoveStore(options.databasePath, options.musicDir);
+    try {
+      this.fileMoves = new MediaFileMoveStore(options.databasePath, options.musicDir);
+    } catch (error) {
+      try { this.quarantine.close(); } catch { /* Preserve the constructor failure. */ }
+      throw error;
+    }
   }
 
+  private closed = false;
+
   close() {
-    this.fileMoves.close();
-    this.quarantine.close();
+    if (this.closed) return;
+    this.closed = true;
+    closeAllSync([
+      () => this.fileMoves.close(),
+      () => this.quarantine.close()
+    ]);
   }
 
   hasHidden(trackId: string) {

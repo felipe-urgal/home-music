@@ -15,3 +15,20 @@ export async function closeAll(steps: ReadonlyArray<() => void | Promise<void>>)
     throw new AggregateError(failures, 'Falha ao encerrar múltiplos recursos do Home Music.');
   }
 }
+
+ // Close composite owners without changing synchronous close() contracts.
+export function closeAllSync(steps: ReadonlyArray<() => void>): void {
+  const failures: unknown[] = [];
+  for (const close of steps) {
+    try {
+      close();
+    } catch (error) {
+      failures.push(error);
+    }
+  }
+
+  if (failures.length === 1) throw failures[0];
+  if (failures.length > 1) {
+    throw new AggregateError(failures, 'Falha ao encerrar múltiplos recursos do Home Music.');
+  }
+}
