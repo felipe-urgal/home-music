@@ -23,14 +23,19 @@ export class LibraryAssistantAutonomyStore {
   private readonly db: DatabaseSync;
   constructor(databasePath: string) {
     this.db = new DatabaseSync(databasePath);
-    this.db.exec(`CREATE TABLE IF NOT EXISTS library_assistant_autonomy (
-      singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
-      enabled INTEGER NOT NULL DEFAULT 0,
-      metadata INTEGER NOT NULL DEFAULT 1,
-      pending_revision INTEGER,
-      active_run_id TEXT,
-      last_summary_json TEXT
-    ); INSERT OR IGNORE INTO library_assistant_autonomy(singleton, enabled, metadata) VALUES (1, ${DEFAULT_CONFIG.enabled ? 1 : 0}, ${DEFAULT_CONFIG.metadata ? 1 : 0});`);
+    try {
+      this.db.exec(`CREATE TABLE IF NOT EXISTS library_assistant_autonomy (
+        singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
+        enabled INTEGER NOT NULL DEFAULT 0,
+        metadata INTEGER NOT NULL DEFAULT 1,
+        pending_revision INTEGER,
+        active_run_id TEXT,
+        last_summary_json TEXT
+      ); INSERT OR IGNORE INTO library_assistant_autonomy(singleton, enabled, metadata) VALUES (1, ${DEFAULT_CONFIG.enabled ? 1 : 0}, ${DEFAULT_CONFIG.metadata ? 1 : 0});`);
+    } catch (error) {
+      try { this.db.close(); } catch { /* Preserve the initialization error. */ }
+      throw error;
+    }
   }
   get(): LibraryAssistantAutonomyState {
     const row = this.db.prepare('SELECT * FROM library_assistant_autonomy WHERE singleton = 1').get() as Record<string, unknown>;
