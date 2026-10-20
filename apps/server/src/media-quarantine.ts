@@ -182,24 +182,29 @@ export class MediaQuarantineStore {
   ) {
     mkdirSync(path.dirname(databasePath), { recursive: true });
     this.db = new DatabaseSync(databasePath);
-    this.db.exec('PRAGMA foreign_keys = ON;');
-    this.db.exec('PRAGMA busy_timeout = 5000;');
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS media_quarantine (
-        track_id TEXT PRIMARY KEY,
-        library_root TEXT NOT NULL,
-        original_relative_path TEXT NOT NULL,
-        quarantine_relative_path TEXT NOT NULL UNIQUE,
-        track_json TEXT NOT NULL,
-        previous_enabled INTEGER NOT NULL CHECK(previous_enabled IN (0, 1)),
-        state TEXT NOT NULL CHECK(state IN ('quarantined', 'deleted')),
-        quarantined_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        last_error TEXT
-      );
-    `);
-    this.pruneResolvedTombstones();
-    this.reloadHiddenTrackIds();
+    try {
+      this.db.exec('PRAGMA foreign_keys = ON;');
+      this.db.exec('PRAGMA busy_timeout = 5000;');
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS media_quarantine (
+          track_id TEXT PRIMARY KEY,
+          library_root TEXT NOT NULL,
+          original_relative_path TEXT NOT NULL,
+          quarantine_relative_path TEXT NOT NULL UNIQUE,
+          track_json TEXT NOT NULL,
+          previous_enabled INTEGER NOT NULL CHECK(previous_enabled IN (0, 1)),
+          state TEXT NOT NULL CHECK(state IN ('quarantined', 'deleted')),
+          quarantined_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          last_error TEXT
+        );
+      `);
+      this.pruneResolvedTombstones();
+      this.reloadHiddenTrackIds();
+    } catch (error) {
+      try { this.db.close(); } catch { /* Preserve the initialization error. */ }
+      throw error;
+    }
   }
 
   close() {

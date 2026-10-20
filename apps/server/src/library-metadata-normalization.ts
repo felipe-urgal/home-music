@@ -294,26 +294,31 @@ export class LibraryMetadataNormalizationStore {
   constructor(databasePath: string) {
     mkdirSync(path.dirname(databasePath), { recursive: true });
     this.db = new DatabaseSync(databasePath);
-    this.db.exec('PRAGMA foreign_keys = ON;');
-    this.db.exec('PRAGMA busy_timeout = 5000;');
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS library_metadata_aliases (
-        id TEXT PRIMARY KEY,
-        kind TEXT NOT NULL CHECK(kind IN ('artist', 'album')),
-        scope TEXT NOT NULL DEFAULT '',
-        source_value TEXT NOT NULL CHECK(length(trim(source_value)) BETWEEN 1 AND ${MAX_METADATA_LENGTH}),
-        canonical_value TEXT NOT NULL CHECK(length(trim(canonical_value)) BETWEEN 1 AND ${MAX_METADATA_LENGTH}),
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        CHECK(source_value <> canonical_value),
-        CHECK((kind = 'artist' AND scope = '') OR (kind = 'album' AND length(trim(scope)) BETWEEN 1 AND ${MAX_METADATA_LENGTH})),
-        UNIQUE(kind, scope, source_value)
-      );
+    try {
+      this.db.exec('PRAGMA foreign_keys = ON;');
+      this.db.exec('PRAGMA busy_timeout = 5000;');
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS library_metadata_aliases (
+          id TEXT PRIMARY KEY,
+          kind TEXT NOT NULL CHECK(kind IN ('artist', 'album')),
+          scope TEXT NOT NULL DEFAULT '',
+          source_value TEXT NOT NULL CHECK(length(trim(source_value)) BETWEEN 1 AND ${MAX_METADATA_LENGTH}),
+          canonical_value TEXT NOT NULL CHECK(length(trim(canonical_value)) BETWEEN 1 AND ${MAX_METADATA_LENGTH}),
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          CHECK(source_value <> canonical_value),
+          CHECK((kind = 'artist' AND scope = '') OR (kind = 'album' AND length(trim(scope)) BETWEEN 1 AND ${MAX_METADATA_LENGTH})),
+          UNIQUE(kind, scope, source_value)
+        );
 
-      CREATE INDEX IF NOT EXISTS idx_library_metadata_aliases_kind_scope
-      ON library_metadata_aliases(kind, scope, canonical_value);
-    `);
-    this.refresh();
+        CREATE INDEX IF NOT EXISTS idx_library_metadata_aliases_kind_scope
+        ON library_metadata_aliases(kind, scope, canonical_value);
+      `);
+      this.refresh();
+    } catch (error) {
+      try { this.db.close(); } catch { /* Preserve the initialization error. */ }
+      throw error;
+    }
   }
 
   close() {
