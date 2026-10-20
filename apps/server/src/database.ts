@@ -8,8 +8,8 @@ import type { IndexedTrack, LibraryTrackDelta } from './library.js';
 import { RHYTHM_ANALYZER_VERSION } from './rhythm-analysis.js';
 import { KEY_ANALYZER_VERSION } from './key-analysis.js';
 import { WAVEFORM_ANALYZER_VERSION } from './waveform-analysis.js';
+import { CURRENT_SCHEMA_VERSION, SQLITE_BUSY_TIMEOUT_MS } from './sqlite-settings.js';
 
-const CURRENT_SCHEMA_VERSION = 20;
 const HISTORY_CAPACITY = 2_000;
 const TRACK_UPSERT_SQL = `
   INSERT INTO tracks(
@@ -291,6 +291,7 @@ export class HomeMusicDatabase {
   constructor(databasePath: string) {
     mkdirSync(path.dirname(databasePath), { recursive: true });
     this.db = new DatabaseSync(databasePath);
+    this.db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
     this.db.exec('PRAGMA foreign_keys = ON;');
     this.db.exec('PRAGMA journal_mode = WAL;');
     this.db.exec('PRAGMA synchronous = NORMAL;');

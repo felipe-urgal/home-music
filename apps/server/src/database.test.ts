@@ -3,8 +3,10 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { Worker } from 'node:worker_threads';
 import test from 'node:test';
 import { HomeMusicDatabase } from './database.js';
+import { CURRENT_SCHEMA_VERSION, SQLITE_BUSY_TIMEOUT_MS } from './sqlite-settings.js';
 import type { IndexedTrack } from './library.js';
 
 function indexedTrack(id: string, filePath: string): IndexedTrack {
@@ -94,7 +96,7 @@ test('SQLite persiste biblioteca, favoritos, histórico, playlists e estado do p
     first.close();
 
     const second = new HomeMusicDatabase(dbPath);
-    assert.equal(second.getSchemaVersion(), 20);
+    assert.equal(second.getSchemaVersion(), CURRENT_SCHEMA_VERSION);
     assert.equal(second.getMetadata('libraryRoot'), '/music');
     assert.equal(second.loadLibraryIntegrityStatus('/other'), null);
     assert.deepEqual(second.loadLibraryIntegrityStatus('/music'), {
@@ -291,7 +293,7 @@ test('migra schema v1 para v14 sem perder estado existente', async () => {
     legacy.close();
 
     const migrated = new HomeMusicDatabase(dbPath);
-    assert.equal(migrated.getSchemaVersion(), 20);
+    assert.equal(migrated.getSchemaVersion(), CURRENT_SCHEMA_VERSION);
     const state = migrated.loadPlaybackState('user-1');
     assert.equal(state.currentTrackId, null);
     assert.equal(state.position, 0);
@@ -356,7 +358,7 @@ test('schema v14 preserva identidade única, papéis e flags válidos de users',
 
   try {
     const db = new HomeMusicDatabase(dbPath);
-    assert.equal(db.getSchemaVersion(), 20);
+    assert.equal(db.getSchemaVersion(), CURRENT_SCHEMA_VERSION);
     db.close();
 
     const raw = new DatabaseSync(dbPath);
@@ -447,6 +449,97 @@ test('estatísticas agregam somente o histórico do usuário por período', asyn
     assert.equal(all.historyCapacity, 2_000);
   } finally {
     db.close();
+    await rm(temp, { recursive: true, force: true });
+  }
+});
+
+
+/** A second thread is necessary: DatabaseSync blocks the calling thread while waiting for locks. */
+async function holdSqliteWriteLock(databasePath: string, releaseAfterMs?: number): Promise<Worker> {
+  const worker = new Worker(`
+    const { parentPort, workerData } = require('node:worker_threads');
+    const { DatabaseSync } = require('node:sqlite');
+    const db = new DatabaseSync(workerData.databasePath);
+    db.exec('BEGIN IMMEDIATE;');
+    parentPort.postMessage('locked');
+    function release() {
+      try { db.exec('ROLLBACK;'); } finally { db.close(); }
+      parentPort.postMessage('released');
+    }
+    if (workerData.releaseAfterMs === null) parentPort.once('message', release);
+    else setTimeout(release, workerData.releaseAfterMs);
+  `, { eval: true, workerData: { databasePath, releaseAfterMs: releaseAfterMs ?? null } });
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      worker.once('message', message => message === 'locked' ? resolve() : reject(new Error('Worker SQLite não obteve lock.')));
+      worker.once('error', reject);
+      worker.once('exit', code => reject(new Error(`Worker SQLite encerrou antes do lock: ${code}`)));
+    });
+    return worker;
+  } catch (error) {
+    await worker.terminate();
+    throw error;
+  }
+}
+
+test('writer concorrente aguarda lock SQLite e persiste após a liberação', async () => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-db-lock-'));
+  const dbPath = path.join(temp, 'home-music.db');
+  const db = new HomeMusicDatabase(dbPath);
+  let worker: Worker | undefined;
+  try {
+    worker = await holdSqliteWriteLock(dbPath, 300);
+    const started = Date.now();
+    db.syncTracks([], '/music', '2026-10-20T10:00:00.000Z');
+    assert.ok(Date.now() - started >= 80, 'O writer aguardou a liberação do lock.');
+    assert.equal(db.getMetadata('libraryRoot'), '/music');
+  } finally {
+    if (worker) await worker.terminate();
+    db.close();
+    await rm(temp, { recursive: true, force: true });
+  }
+});
+
+test('lock SQLite persistente expira com SQLITE_BUSY em vez de aguardar indefinidamente', async () => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-db-lock-'));
+  const dbPath = path.join(temp, 'home-music.db');
+  const db = new HomeMusicDatabase(dbPath);
+  let worker: Worker | undefined;
+  try {
+    worker = await holdSqliteWriteLock(dbPath);
+    const started = Date.now();
+    assert.throws(() => db.syncTracks([], '/music', '2026-10-20T10:00:00.000Z'), /SQLITE_BUSY|database is locked/i);
+    assert.ok(Date.now() - started >= SQLITE_BUSY_TIMEOUT_MS - 750, 'O lock deve respeitar o deadline configurado.');
+    assert.equal(db.getMetadata('libraryRoot'), undefined);
+  } finally {
+    if (worker) await worker.terminate();
+    db.close();
+    await rm(temp, { recursive: true, force: true });
+  }
+});
+
+test('schema futuro é rejeitado sem modificar o banco', async () => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-db-future-'));
+  const dbPath = path.join(temp, 'home-music.db');
+  try {
+    const original = new HomeMusicDatabase(dbPath);
+    original.close();
+    const raw = new DatabaseSync(dbPath);
+    try {
+      raw.exec(`PRAGMA user_version = ${CURRENT_SCHEMA_VERSION + 1};`);
+    } finally {
+      raw.close();
+    }
+    assert.throws(() => new HomeMusicDatabase(dbPath), /Versão de schema SQLite não suportada/);
+    const check = new DatabaseSync(dbPath, { readOnly: true });
+    try {
+      assert.equal((check.prepare('PRAGMA user_version;').get() as { user_version: number }).user_version, CURRENT_SCHEMA_VERSION + 1);
+      assert.equal((check.prepare('PRAGMA integrity_check;').get() as { integrity_check: string }).integrity_check, 'ok');
+    } finally {
+      check.close();
+    }
+  } finally {
     await rm(temp, { recursive: true, force: true });
   }
 });
