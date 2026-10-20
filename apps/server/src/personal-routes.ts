@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import type { FastifyInstance } from 'fastify';
 import { MAX_PLAYLIST_TRACKS, type PlaybackState, type Track } from '@home-music/shared';
 import { registerLibraryViewRoutes } from './library-view-routes.js';
+import { closeAll } from './close-resources.js';
 import { registerPlaybackHistoryRoutes } from './playback-history-routes.js';
 import { PersonalDataExportService } from './personal-data-export.js';
 import { registerPersonalDataExportRoutes } from './personal-data-export-routes.js';
@@ -49,8 +50,10 @@ export function registerPersonalRoutes(
   }
 
   app.addHook('onClose', async () => {
-    personalDataExporter.close();
-    personalDataImportApplyStore?.close();
+    await closeAll([
+      () => personalDataExporter.close(),
+      () => personalDataImportApplyStore?.close()
+    ]);
   });
 
   app.get('/api/favorites', async (request, reply) => {
