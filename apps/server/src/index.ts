@@ -281,14 +281,30 @@ registerAdminImportRoutes(app, infrastructure.importJobs, {
 });
 registerAdminOperationHistoryRoutes(app, infrastructure.operationHistory);
 registerAdminTranscodeCacheRoutes(app, infrastructure.transcodeCacheMaintenance);
-registerLibraryAssistant(app, {
-  databasePath,
-  library,
-  projection: adminLibraryProjection,
-  queue: integrityQueue,
-  observability: infrastructure.longJobObservability,
-  onProviderGatewayReady: providers => { importProviderGateway = providers; }
-});
+try {
+  registerLibraryAssistant(app, {
+    databasePath,
+    library,
+    projection: adminLibraryProjection,
+    queue: integrityQueue,
+    observability: infrastructure.longJobObservability,
+    onProviderGatewayReady: providers => { importProviderGateway = providers; }
+  });
+} catch (error) {
+  // Registration is synchronous, but some assistant resources close asynchronously.
+  // Await Fastify's early onClose hook before allowing bootstrap to fail.
+  try {
+    await app.close();
+  } catch (closeError) {
+    app.log.error({ err: closeError }, 'Erro ao liberar recursos após falha de inicialização do assistente.');
+  }
+  try {
+    infrastructure.close();
+  } catch (closeError) {
+    app.log.error({ err: closeError }, 'Erro ao encerrar SQLite central após falha de inicialização.');
+  }
+  throw error;
+}
 registerLibraryRoutes(app, library, integrityQueue, adminLibraryProjection);
 registerPersonalRoutes(app, personal, { databasePath, library });
 registerTvRemoteRoutes(app, tvRemote);
