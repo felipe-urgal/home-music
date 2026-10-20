@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
+import { closeAllSync } from './close-resources.js';
 import type { Playlist, SmartPlaylistRule } from '@home-music/shared';
 import { LibraryMetadataNormalizationStore } from './library-metadata-normalization.js';
 
@@ -214,9 +215,15 @@ export class SmartPlaylistStore {
     `).get());
   }
 
+  private closed = false;
+
   close() {
-    this.normalization.close();
-    this.db.close();
+    if (this.closed) return;
+    this.closed = true;
+    closeAllSync([
+      () => this.normalization.close(),
+      () => this.db.close()
+    ]);
   }
 
   private loadEvaluationSnapshot(

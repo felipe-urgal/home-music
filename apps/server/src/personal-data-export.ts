@@ -3,6 +3,7 @@ import type {
   PortableTrackReferenceV1
 } from '@home-music/shared/personal-data';
 import { LibraryViewStore } from './library-views.js';
+import { closeAllSync } from './close-resources.js';
 import type { PersonalLibraryService } from './personal-library-service.js';
 import { SmartPlaylistStore } from './smart-playlists.js';
 
@@ -29,12 +30,23 @@ export class PersonalDataExportService {
     private readonly now: () => Date = () => new Date()
   ) {
     this.smartPlaylists = new SmartPlaylistStore(databasePath);
-    this.libraryViews = new LibraryViewStore(databasePath);
+    try {
+      this.libraryViews = new LibraryViewStore(databasePath);
+    } catch (error) {
+      try { this.smartPlaylists.close(); } catch { /* Preserve the constructor failure. */ }
+      throw error;
+    }
   }
 
+  private closed = false;
+
   close() {
-    this.smartPlaylists.close();
-    this.libraryViews.close();
+    if (this.closed) return;
+    this.closed = true;
+    closeAllSync([
+      () => this.smartPlaylists.close(),
+      () => this.libraryViews.close()
+    ]);
   }
 
   exportForUser(userId: string): PersonalDataBundleV1 {

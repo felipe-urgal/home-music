@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
+import { closeAllSync } from './close-resources.js';
 import type { Track } from '@home-music/shared';
 import {
   isLibraryAssistantAutoApplicable,
@@ -179,9 +180,15 @@ export class LibraryAssistantCompositeReviewService {
     this.now = options.now ?? (() => new Date());
   }
 
+  private closed = false;
+
   close() {
-    this.decisions.close();
-    this.options.base.close();
+    if (this.closed) return;
+    this.closed = true;
+    closeAllSync([
+      () => this.decisions.close(),
+      () => this.options.base.close()
+    ]);
   }
 
   getReviewQueue(limit = 200): AdminLibraryAssistantReviewResponse {
