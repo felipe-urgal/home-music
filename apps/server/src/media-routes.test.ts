@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { get } from 'node:http';
+import { setTimeout as delay } from 'node:timers/promises';
 import { open, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -162,6 +164,61 @@ test('HTTP transcode retorna 503 e libera lease quando o cache fica vazio', asyn
     const response = await app.inject({ method: 'GET', url: '/api/tracks/song/transcode' });
     assert.equal(response.statusCode, 503);
     assert.equal(releases, 1);
+  } finally {
+    await app.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+
+test('HTTP transcode mantém lease até o disconnect real do cliente e fecha o handle', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'home-music-transcode-disconnect-'));
+  const filePath = path.join(root, 'large.m4a');
+  // Evita que toda a resposta caiba nos buffers de socket antes do abort remoto.
+  await writeFile(filePath, Buffer.alloc(16 * 1024 * 1024, 0x61));
+  const app = Fastify();
+  let releases = 0;
+  let handle: Awaited<ReturnType<typeof open>> | undefined;
+  const media = {
+    ffmpegAvailable: true,
+    prepareTranscode: async () => {
+      handle = await open(filePath, 'r');
+      return {
+        prepared: { cacheHit: true, path: filePath },
+        transcoded: handle,
+        gainDb: null,
+        release: () => { releases++; }
+      };
+    }
+  };
+  registerMediaRoutes(
+    app,
+    { root, getTrack: () => ({ id: 'song', mimeType: 'audio/mpeg' }) } as unknown as LibraryService,
+    media as unknown as TrackMediaInfrastructure
+  );
+
+  try {
+    const url = await app.listen({ host: '127.0.0.1', port: 0 });
+    const response = await new Promise<import('node:http').IncomingMessage>((resolve, reject) => {
+      const request = get(`${url}/api/tracks/song/transcode`, resolve);
+      request.once('error', reject);
+    });
+    try {
+      assert.equal(response.statusCode, 200);
+      await new Promise<void>((resolve, reject) => {
+        response.once('data', () => { response.pause(); resolve(); });
+        response.once('error', reject);
+      });
+      assert.equal(releases, 0, 'O lease deve existir enquanto o cliente ainda está consumindo bytes.');
+    } finally {
+      response.on('error', () => undefined); // ECONNRESET é esperado ao abortar o socket.
+      response.destroy();
+    }
+
+    const deadline = Date.now() + 5_000;
+    while (releases === 0 && Date.now() < deadline) await delay(25);
+    assert.equal(releases, 1, 'Disconnect deve liberar o lease exatamente uma vez.');
+    assert.equal(handle?.fd, -1, 'O file descriptor deve estar fechado.');
   } finally {
     await app.close();
     await rm(root, { recursive: true, force: true });
