@@ -5,6 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 import { HomeMusicDatabase } from './database.js';
+import { CURRENT_SCHEMA_VERSION } from './sqlite-settings.js';
 import {
   BACKUP_DATABASE_FILE,
   BACKUP_MANIFEST_FILE,
@@ -45,7 +46,8 @@ test('limite de schema do backup acompanha o schema atual do Home Music', async 
   const databasePath = path.join(dir, 'home-music.db');
   try {
     const db = new HomeMusicDatabase(databasePath);
-    assert.equal(db.getSchemaVersion(), MAX_SUPPORTED_SCHEMA_VERSION);
+    assert.equal(MAX_SUPPORTED_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION);
+    assert.equal(db.getSchemaVersion(), CURRENT_SCHEMA_VERSION);
     db.close();
   } finally {
     await rm(dir, { recursive: true, force: true });

@@ -13,9 +13,10 @@ import {
 } from 'node:fs/promises';
 import path from 'node:path';
 import { backup, DatabaseSync } from 'node:sqlite';
+import { CURRENT_SCHEMA_VERSION, SQLITE_BUSY_TIMEOUT_MS } from './sqlite-settings.js';
 
 export const BACKUP_FORMAT_VERSION = 1;
-export const MAX_SUPPORTED_SCHEMA_VERSION = 20;
+export const MAX_SUPPORTED_SCHEMA_VERSION = CURRENT_SCHEMA_VERSION;
 export const BACKUP_DATABASE_FILE = 'home-music.db';
 export const BACKUP_MANIFEST_FILE = 'manifest.json';
 
@@ -121,7 +122,7 @@ function firstValue(row: Row | undefined) {
 }
 
 function databaseInfo(databasePath: string) {
-  const db = new DatabaseSync(databasePath, { readOnly: true, timeout: 5_000 });
+  const db = new DatabaseSync(databasePath, { readOnly: true, timeout: SQLITE_BUSY_TIMEOUT_MS });
   try {
     const integrityRows = db.prepare('PRAGMA integrity_check;').all() as Row[];
     const integrityOk = integrityRows.length === 1 && firstValue(integrityRows[0]) === 'ok';
@@ -272,7 +273,7 @@ export async function createBackupArtifact(options: CreateBackupOptions) {
   await mkdir(partialPath, { mode: 0o700 });
 
   try {
-    const sourceDb = new DatabaseSync(options.databasePath, { timeout: 5_000 });
+    const sourceDb = new DatabaseSync(options.databasePath, { timeout: SQLITE_BUSY_TIMEOUT_MS });
     try {
       await backup(sourceDb, snapshotPath, { rate: 100 });
     } finally {
@@ -309,7 +310,7 @@ export async function createBackupArtifact(options: CreateBackupOptions) {
 }
 
 async function createRollbackSnapshot(databasePath: string, rollbackPath: string) {
-  const currentDb = new DatabaseSync(databasePath, { timeout: 5_000 });
+  const currentDb = new DatabaseSync(databasePath, { timeout: SQLITE_BUSY_TIMEOUT_MS });
   try {
     await backup(currentDb, rollbackPath, { rate: 100 });
   } finally {
