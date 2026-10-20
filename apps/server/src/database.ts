@@ -291,11 +291,21 @@ export class HomeMusicDatabase {
   constructor(databasePath: string) {
     mkdirSync(path.dirname(databasePath), { recursive: true });
     this.db = new DatabaseSync(databasePath);
-    this.db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
-    this.db.exec('PRAGMA foreign_keys = ON;');
-    this.db.exec('PRAGMA journal_mode = WAL;');
-    this.db.exec('PRAGMA synchronous = NORMAL;');
-    this.migrate();
+    try {
+      this.db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
+      this.db.exec('PRAGMA foreign_keys = ON;');
+      this.db.exec('PRAGMA journal_mode = WAL;');
+      this.db.exec('PRAGMA synchronous = NORMAL;');
+      this.migrate();
+    } catch (error) {
+      // A failed startup must not keep a SQLite connection alive for a retry.
+      try {
+        this.db.close();
+      } catch {
+        // Preserve the initial migration error.
+      }
+      throw error;
+    }
   }
 
   private schemaVersion() {
@@ -308,129 +318,152 @@ export class HomeMusicDatabase {
     return rows.some(row => stringValue(row.name) === column);
   }
 
+  /** Migrations 1–5 historically used non-atomic DDL followed by user_version. */
+  private runAtomicLegacyMigration(targetVersion: number, migrate: () => void) {
+    this.db.exec('BEGIN IMMEDIATE;');
+    try {
+      migrate();
+      // This pragma is committed together with the DDL/data changes.
+      this.db.exec(`PRAGMA user_version = ${targetVersion};`);
+      this.db.exec('COMMIT;');
+    } catch (error) {
+      try {
+        this.db.exec('ROLLBACK;');
+      } catch {
+        // Preserve the original failure if SQLite has already closed the transaction.
+      }
+      throw error;
+    }
+  }
+
   private migrate() {
     let version = this.schemaVersion();
 
     if (version < 1) {
-      this.db.exec(`
-        CREATE TABLE IF NOT EXISTS metadata (
-          key TEXT PRIMARY KEY,
-          value TEXT NOT NULL
-        );
+      this.runAtomicLegacyMigration(1, () => {
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS metadata (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+          );
 
-        CREATE TABLE IF NOT EXISTS tracks (
-          id TEXT PRIMARY KEY,
-          file_path TEXT NOT NULL UNIQUE,
-          title TEXT NOT NULL,
-          artist TEXT NOT NULL,
-          album TEXT NOT NULL,
-          album_artist TEXT NOT NULL,
-          folder TEXT NOT NULL,
-          folder_path TEXT NOT NULL DEFAULT '',
-          duration REAL,
-          format TEXT NOT NULL,
-          has_cover INTEGER NOT NULL,
-          mime_type TEXT NOT NULL,
-          file_size INTEGER NOT NULL,
-          mtime_ms REAL NOT NULL
-        );
+          CREATE TABLE IF NOT EXISTS tracks (
+            id TEXT PRIMARY KEY,
+            file_path TEXT NOT NULL UNIQUE,
+            title TEXT NOT NULL,
+            artist TEXT NOT NULL,
+            album TEXT NOT NULL,
+            album_artist TEXT NOT NULL,
+            folder TEXT NOT NULL,
+            folder_path TEXT NOT NULL DEFAULT '',
+            duration REAL,
+            format TEXT NOT NULL,
+            has_cover INTEGER NOT NULL,
+            mime_type TEXT NOT NULL,
+            file_size INTEGER NOT NULL,
+            mtime_ms REAL NOT NULL
+          );
 
-        CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks(artist);
-        CREATE INDEX IF NOT EXISTS idx_tracks_album ON tracks(album_artist, album);
-        CREATE INDEX IF NOT EXISTS idx_tracks_folder ON tracks(folder_path);
+          CREATE INDEX IF NOT EXISTS idx_tracks_artist ON tracks(artist);
+          CREATE INDEX IF NOT EXISTS idx_tracks_album ON tracks(album_artist, album);
+          CREATE INDEX IF NOT EXISTS idx_tracks_folder ON tracks(folder_path);
 
-        CREATE TABLE IF NOT EXISTS favorites (
-          track_id TEXT PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
-          created_at TEXT NOT NULL
-        );
+          CREATE TABLE IF NOT EXISTS favorites (
+            track_id TEXT PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
+            created_at TEXT NOT NULL
+          );
 
-        CREATE TABLE IF NOT EXISTS history (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
-          played_at TEXT NOT NULL
-        );
+          CREATE TABLE IF NOT EXISTS history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+            played_at TEXT NOT NULL
+          );
 
-        CREATE INDEX IF NOT EXISTS idx_history_played_at ON history(played_at DESC);
+          CREATE INDEX IF NOT EXISTS idx_history_played_at ON history(played_at DESC);
 
-        CREATE TABLE IF NOT EXISTS playlists (
-          id TEXT PRIMARY KEY,
-          name TEXT NOT NULL,
-          created_at TEXT NOT NULL,
-          updated_at TEXT NOT NULL
-        );
+          CREATE TABLE IF NOT EXISTS playlists (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+          );
 
-        CREATE TABLE IF NOT EXISTS playlist_tracks (
-          playlist_id TEXT NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
-          track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
-          position INTEGER NOT NULL,
-          PRIMARY KEY (playlist_id, position),
-          UNIQUE (playlist_id, track_id)
-        );
+          CREATE TABLE IF NOT EXISTS playlist_tracks (
+            playlist_id TEXT NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
+            track_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+            position INTEGER NOT NULL,
+            PRIMARY KEY (playlist_id, position),
+            UNIQUE (playlist_id, track_id)
+          );
 
-        CREATE TABLE IF NOT EXISTS playback_state (
-          id INTEGER PRIMARY KEY CHECK (id = 1),
-          current_track_id TEXT,
-          position REAL NOT NULL DEFAULT 0,
-          volume REAL NOT NULL DEFAULT 1,
-          shuffle INTEGER NOT NULL DEFAULT 0,
-          repeat_mode TEXT NOT NULL DEFAULT 'off',
-          queue_json TEXT NOT NULL DEFAULT '[]',
-          updated_at TEXT NOT NULL
-        );
+          CREATE TABLE IF NOT EXISTS playback_state (
+            id INTEGER PRIMARY KEY CHECK (id = 1),
+            current_track_id TEXT,
+            position REAL NOT NULL DEFAULT 0,
+            volume REAL NOT NULL DEFAULT 1,
+            shuffle INTEGER NOT NULL DEFAULT 0,
+            repeat_mode TEXT NOT NULL DEFAULT 'off',
+            queue_json TEXT NOT NULL DEFAULT '[]',
+            updated_at TEXT NOT NULL
+          );
 
-        PRAGMA user_version = 1;
-      `);
+        `);
+      });
       version = 1;
     }
 
     if (version < 2) {
-      if (!this.hasColumn('playback_state', 'base_queue_json')) {
-        this.db.exec(`ALTER TABLE playback_state ADD COLUMN base_queue_json TEXT NOT NULL DEFAULT '[]';`);
-      }
-      this.db.exec('PRAGMA user_version = 2;');
+      this.runAtomicLegacyMigration(2, () => {
+        if (!this.hasColumn('playback_state', 'base_queue_json')) {
+          this.db.exec(`ALTER TABLE playback_state ADD COLUMN base_queue_json TEXT NOT NULL DEFAULT '[]';`);
+        }
+      });
       version = 2;
     }
 
     if (version < 3) {
-      if (!this.hasColumn('playback_state', 'was_playing')) {
-        this.db.exec(`ALTER TABLE playback_state ADD COLUMN was_playing INTEGER NOT NULL DEFAULT 0;`);
-      }
-      this.db.exec('PRAGMA user_version = 3;');
+      this.runAtomicLegacyMigration(3, () => {
+        if (!this.hasColumn('playback_state', 'was_playing')) {
+          this.db.exec(`ALTER TABLE playback_state ADD COLUMN was_playing INTEGER NOT NULL DEFAULT 0;`);
+        }
+      });
       version = 3;
     }
 
     if (version < 4) {
-      if (this.hasColumn('tracks', 'id')) {
-        if (!this.hasColumn('tracks', 'replaygain_track_db')) {
-          this.db.exec('ALTER TABLE tracks ADD COLUMN replaygain_track_db REAL;');
+      this.runAtomicLegacyMigration(4, () => {
+        if (this.hasColumn('tracks', 'id')) {
+          if (!this.hasColumn('tracks', 'replaygain_track_db')) {
+            this.db.exec('ALTER TABLE tracks ADD COLUMN replaygain_track_db REAL;');
+          }
+          if (!this.hasColumn('tracks', 'replaygain_album_db')) {
+            this.db.exec('ALTER TABLE tracks ADD COLUMN replaygain_album_db REAL;');
+          }
         }
-        if (!this.hasColumn('tracks', 'replaygain_album_db')) {
-          this.db.exec('ALTER TABLE tracks ADD COLUMN replaygain_album_db REAL;');
+        if (this.hasColumn('metadata', 'key')) {
+          // Força um único re-scan após o upgrade para preencher as tags novas.
+          this.db.prepare('DELETE FROM metadata WHERE key = ?').run('scannedAt');
         }
-      }
-      if (this.hasColumn('metadata', 'key')) {
-        // Força um único re-scan após o upgrade para preencher as tags novas.
-        this.db.prepare('DELETE FROM metadata WHERE key = ?').run('scannedAt');
-      }
-      this.db.exec('PRAGMA user_version = 4;');
+      });
       version = 4;
     }
 
     if (version < 5) {
-      if (this.hasColumn('playlists', 'id')) {
-        if (!this.hasColumn('playlists', 'source')) {
-          this.db.exec("ALTER TABLE playlists ADD COLUMN source TEXT NOT NULL DEFAULT 'manual';");
+      this.runAtomicLegacyMigration(5, () => {
+        if (this.hasColumn('playlists', 'id')) {
+          if (!this.hasColumn('playlists', 'source')) {
+            this.db.exec("ALTER TABLE playlists ADD COLUMN source TEXT NOT NULL DEFAULT 'manual';");
+          }
+          if (!this.hasColumn('playlists', 'source_key')) {
+            this.db.exec('ALTER TABLE playlists ADD COLUMN source_key TEXT;');
+          }
+          this.db.exec(`
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_playlists_source_key
+            ON playlists(source, source_key)
+            WHERE source_key IS NOT NULL;
+          `);
         }
-        if (!this.hasColumn('playlists', 'source_key')) {
-          this.db.exec('ALTER TABLE playlists ADD COLUMN source_key TEXT;');
-        }
-        this.db.exec(`
-          CREATE UNIQUE INDEX IF NOT EXISTS idx_playlists_source_key
-          ON playlists(source, source_key)
-          WHERE source_key IS NOT NULL;
-        `);
-      }
-      this.db.exec('PRAGMA user_version = 5;');
+      });
       version = 5;
     }
 
