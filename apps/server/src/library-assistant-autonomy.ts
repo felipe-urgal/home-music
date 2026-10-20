@@ -207,8 +207,9 @@ export class LibraryAssistantAutonomyController {
 }
 
 export function attachLibraryAssistantAutonomyLifecycle(library: LibraryService, controller: LibraryAssistantAutonomyController) {
-  const originalRescan = library.rescan.bind(library);
-  library.rescan = ((trigger?: Parameters<LibraryService['rescan']>[0]) => {
+  const previousRescan = library.rescan;
+  const originalRescan = previousRescan.bind(library);
+  const wrappedRescan = ((trigger?: Parameters<LibraryService['rescan']>[0]) => {
     const before = library.status().revision;
     return originalRescan(trigger).then(result => {
       const after = library.status().revision;
@@ -216,13 +217,21 @@ export function attachLibraryAssistantAutonomyLifecycle(library: LibraryService,
       return result;
     });
   }) as LibraryService['rescan'];
+  library.rescan = wrappedRescan;
 
-  const originalImport = library.updateForPromotedImport.bind(library);
-  library.updateForPromotedImport = (async (...args: Parameters<LibraryService['updateForPromotedImport']>) => {
+  const previousImport = library.updateForPromotedImport;
+  const originalImport = previousImport.bind(library);
+  const wrappedImport = (async (...args: Parameters<LibraryService['updateForPromotedImport']>) => {
     const before = library.status().revision;
     const result = await originalImport(...args);
     const after = library.status().revision;
     if (after !== before) controller.notifyLibraryChanged(after, 1);
     return result;
   }) as LibraryService['updateForPromotedImport'];
+  library.updateForPromotedImport = wrappedImport;
+
+  return () => {
+    if (library.rescan === wrappedRescan) library.rescan = previousRescan;
+    if (library.updateForPromotedImport === wrappedImport) library.updateForPromotedImport = previousImport;
+  };
 }
