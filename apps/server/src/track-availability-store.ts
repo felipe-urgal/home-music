@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
+import { SQLITE_BUSY_TIMEOUT_MS } from './sqlite-settings.js';
 
 type Row = Record<string, unknown>;
 
@@ -9,7 +10,7 @@ export class TrackAvailabilityStore {
   constructor(databasePath: string) {
     this.db = new DatabaseSync(databasePath);
     this.db.exec('PRAGMA foreign_keys = ON;');
-    this.db.exec('PRAGMA busy_timeout = 5000;');
+    this.db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS track_availability (
         track_id TEXT PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
