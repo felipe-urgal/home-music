@@ -222,13 +222,7 @@ test('Hot Cues validam duração e persistem separados da análise derivada', as
   }
 });
 
-test('migra schema v1 para v14 sem perder estado existente', async () => {
-  const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-db-'));
-  const dbPath = path.join(temp, 'legacy.db');
-
-  try {
-    const legacy = new DatabaseSync(dbPath);
-    legacy.exec(`
+const LEGACY_V1_FIXTURE_SQL = `
       CREATE TABLE metadata (
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
@@ -289,7 +283,15 @@ test('migra schema v1 para v14 sem perder estado existente', async () => {
         id, current_track_id, position, volume, shuffle, repeat_mode, queue_json, updated_at
       ) VALUES (1, 'a', 15, 0.5, 1, 'all', '["a"]', '2026-08-24T12:00:00.000Z');
       PRAGMA user_version = 1;
-    `);
+    `;
+
+test('migra schema v1 para a versão atual sem perder estado existente', async () => {
+  const temp = await mkdtemp(path.join(os.tmpdir(), 'home-music-db-'));
+  const dbPath = path.join(temp, 'legacy.db');
+
+  try {
+    const legacy = new DatabaseSync(dbPath);
+    legacy.exec(LEGACY_V1_FIXTURE_SQL);
     legacy.close();
 
     const migrated = new HomeMusicDatabase(dbPath);
@@ -541,5 +543,133 @@ test('schema futuro é rejeitado sem modificar o banco', async () => {
     }
   } finally {
     await rm(temp, { recursive: true, force: true });
+  }
+});
+
+function assertSqliteIntegrity(db: DatabaseSync) {
+  assert.equal((db.prepare('PRAGMA integrity_check').get() as { integrity_check: string }).integrity_check, 'ok');
+  assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
+}
+
+test('migration v1: falha em DDL restaura user_version 0 e permite retry', async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'home-music-migration-v1-'));
+  const databasePath = path.join(dir, 'legacy.db');
+  try {
+    const raw = new DatabaseSync(databasePath);
+    // IF NOT EXISTS não impede que CREATE INDEX falhe ao tentar indexar uma VIEW.
+    raw.exec('CREATE VIEW tracks AS SELECT 1 AS id;');
+    raw.close();
+    assert.throws(() => new HomeMusicDatabase(databasePath), /view|index|table/i);
+    const after = new DatabaseSync(databasePath);
+    try {
+      assert.equal((after.prepare('PRAGMA user_version').get() as { user_version: number }).user_version, 0);
+      assert.equal(after.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='metadata'").get(), undefined);
+      after.exec('DROP VIEW tracks;');
+      assertSqliteIntegrity(after);
+    } finally {
+      after.close();
+    }
+    const reopened = new HomeMusicDatabase(databasePath);
+    try {
+      assert.equal(reopened.getSchemaVersion(), CURRENT_SCHEMA_VERSION);
+    } finally {
+      reopened.close();
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('migration v4: rollback de ALTER/DELETE quando trigger falha, seguido de recuperação', async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'home-music-migration-v4-'));
+  const databasePath = path.join(dir, 'legacy.db');
+  try {
+    const legacy = new DatabaseSync(databasePath);
+    try {
+      legacy.exec(LEGACY_V1_FIXTURE_SQL);
+      legacy.exec(`
+        ALTER TABLE playback_state ADD COLUMN base_queue_json TEXT NOT NULL DEFAULT '[]';
+        ALTER TABLE playback_state ADD COLUMN was_playing INTEGER NOT NULL DEFAULT 0;
+        INSERT INTO metadata(key, value) VALUES ('scannedAt', 'original');
+        CREATE TRIGGER fail_v4 BEFORE DELETE ON metadata
+        WHEN OLD.key = 'scannedAt' BEGIN
+          SELECT RAISE(ABORT, 'injected migration v4 failure');
+        END;
+        PRAGMA user_version = 3;
+      `);
+    } finally {
+      legacy.close();
+    }
+    assert.throws(() => new HomeMusicDatabase(databasePath), /injected migration v4 failure/);
+    const after = new DatabaseSync(databasePath);
+    try {
+      assert.equal((after.prepare('PRAGMA user_version').get() as { user_version: number }).user_version, 3);
+      const cols = (after.prepare('PRAGMA table_info(tracks)').all() as Array<{ name: string }>).map(c => c.name);
+      assert.ok(!cols.includes('replaygain_track_db') && !cols.includes('replaygain_album_db'));
+      assert.equal((after.prepare("SELECT value FROM metadata WHERE key='scannedAt'").get() as { value: string }).value, 'original');
+      assertSqliteIntegrity(after);
+      after.exec('DROP TRIGGER fail_v4;');
+    } finally {
+      after.close();
+    }
+    const reopened = new HomeMusicDatabase(databasePath);
+    try {
+      assert.equal(reopened.getSchemaVersion(), CURRENT_SCHEMA_VERSION);
+      assert.equal(reopened.getMetadata('scannedAt'), undefined);
+      assert.equal(reopened.loadTracks()[0]?.id, 'a');
+    } finally {
+      reopened.close();
+    }
+    const verify = new DatabaseSync(databasePath);
+    try { assertSqliteIntegrity(verify); } finally { verify.close(); }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('migration v5: índice UNIQUE falha após ALTER e rollback preserva schema e playlists', async () => {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'home-music-migration-v5-'));
+  const databasePath = path.join(dir, 'legacy.db');
+  try {
+    const legacy = new DatabaseSync(databasePath);
+    try {
+      legacy.exec(LEGACY_V1_FIXTURE_SQL);
+      legacy.exec(`
+        ALTER TABLE playback_state ADD COLUMN base_queue_json TEXT NOT NULL DEFAULT '[]';
+        ALTER TABLE playback_state ADD COLUMN was_playing INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE tracks ADD COLUMN replaygain_track_db REAL;
+        ALTER TABLE tracks ADD COLUMN replaygain_album_db REAL;
+        -- Emula uma migration 5 histórica parcialmente aplicada (source_key sem source).
+        ALTER TABLE playlists ADD COLUMN source_key TEXT;
+        INSERT INTO playlists(id, name, created_at, updated_at, source_key)
+        VALUES ('p1','P1','2026-01-01','2026-01-01','duplicate'),
+               ('p2','P2','2026-01-01','2026-01-01','duplicate');
+        PRAGMA user_version = 4;
+      `);
+    } finally {
+      legacy.close();
+    }
+    assert.throws(() => new HomeMusicDatabase(databasePath), /UNIQUE constraint failed/i);
+    const after = new DatabaseSync(databasePath);
+    try {
+      assert.equal((after.prepare('PRAGMA user_version').get() as { user_version: number }).user_version, 4);
+      const cols = (after.prepare('PRAGMA table_info(playlists)').all() as Array<{ name: string }>).map(c => c.name);
+      assert.ok(cols.includes('source_key') && !cols.includes('source'));
+      assert.equal((after.prepare('SELECT COUNT(*) AS count FROM playlists').get() as { count: number }).count, 2);
+      assertSqliteIntegrity(after);
+      after.exec("UPDATE playlists SET source_key = 'unique' WHERE id = 'p2';");
+    } finally {
+      after.close();
+    }
+    const reopened = new HomeMusicDatabase(databasePath);
+    try {
+      assert.equal(reopened.getSchemaVersion(), CURRENT_SCHEMA_VERSION);
+    } finally {
+      reopened.close();
+    }
+    const verify = new DatabaseSync(databasePath);
+    try { assertSqliteIntegrity(verify); } finally { verify.close(); }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
   }
 });
