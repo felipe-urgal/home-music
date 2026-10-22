@@ -131,6 +131,38 @@ automática por tamanho/mtime nem fingerprint completo para supor identidade.
 
 Serve privado é o perfil recomendado. Funnel é exposição pública explícita.
 
+### Inicialização conjunta com o Home Music
+
+Na execução de `npm run service:install`, se o host tiver a unit
+`tailscaled.service` instalada, a unit do **Home Music** passa a incluir
+`Wants=tailscaled.service` e `After=tailscaled.service`. Assim, um Start
+ou Restart do Home Music pelo Dev Dashboard também solicita a inicialização
+do daemon Tailscale, sem necessitar de sudo adicional no Dashboard.
+
+A dependência é **opcional**: falhas, ausência ou indisponibilidade do Tailscale
+não impedem o Home Music de iniciar localmente. Parar Home Music **não para**
+`tailscaled` e não revoga o acesso remoto à máquina. A mudança não configura
+Tailscale Serve/Funnel nem autentica o dispositivo na tailnet.
+`After` ordena o início, mas não aguarda login nem prontidão HTTPS.
+
+Para manter o acesso remoto independentemente do estado do Home Music,
+habilite o daemon uma única vez:
+
+```bash
+sudo systemctl enable --now tailscaled
+systemctl is-active tailscaled
+tailscale status
+tailscale serve status
+```
+
+Instalações anteriores precisam executar `npm run service:install` após
+atualizar o checkout para gerar a nova unit. Isso faz build e reinicia o Home
+Music; execute em janela apropriada. `service:update` não substitui a unit.
+Se instalar Tailscale depois do Home Music, reexecute `service:install`
+para incluir a dependência opcional.
+
+
+
 ```bash
 npm run tailscale:status
 npm run tailscale:enable

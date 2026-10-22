@@ -97,6 +97,14 @@ ROOT_ARG_ESCAPED="$(systemd_quote_value "${ROOT_DIR}")"
 NODE_ARG_ESCAPED="$(systemd_quote_value "${NODE_BIN}")"
 HOME_ESCAPED="$(systemd_quote_value "${HOME}")"
 ROOT_READ_ONLY_DIRECTIVE="ReadOnlyPaths=\"${ROOT_PATH_ESCAPED}\""
+# Optional start-only relationship. Home Music works even when Tailscale is absent
+# or cannot start, and stopping Home Music never stops the Tailscale daemon.
+TAILSCALE_AFTER=""
+TAILSCALE_WANTS=""
+if [[ "${MODE}" == "install" ]] && systemctl cat tailscaled.service >/dev/null 2>&1; then
+  TAILSCALE_AFTER=" tailscaled.service"
+  TAILSCALE_WANTS=" tailscaled.service"
+fi
 declare -a RUNTIME_READ_WRITE_DIRECTIVES=()
 RUNTIME_READ_WRITE_UNIT_LINES=""
 
@@ -231,8 +239,8 @@ else
   cat > "${TMP_SERVICE}" <<EOF_SERVICE
 [Unit]
 Description=Home Music personal streaming server
-After=network-online.target local-fs.target
-Wants=network-online.target
+After=network-online.target local-fs.target${TAILSCALE_AFTER}
+Wants=network-online.target${TAILSCALE_WANTS}
 
 [Service]
 Type=simple
@@ -359,6 +367,12 @@ if [[ "${MODE}" == "update" ]]; then
   echo "Home Music atualizado e reiniciado com segurança."
 else
   echo "Home Music instalado e iniciado."
+  if [[ -n "${TAILSCALE_WANTS}" ]]; then
+    echo "Tailscale: tailscaled.service será iniciado junto com Home Music (quando necessário)."
+    echo "Tailscale continua ligado se Home Music for parado."
+  else
+    echo "Tailscale: daemon não instalado; Home Music permanece independente."
+  fi
   echo "Deploys futuros podem usar service:update/prod:deploy sem senha por meio do helper NOPASSWD limitado."
 fi
 echo "Status:   systemctl status ${SERVICE_NAME} --no-pager"
