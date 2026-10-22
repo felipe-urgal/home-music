@@ -172,7 +172,10 @@ export class LibraryService {
       scanning: this.scanning,
       scannedAt: this.scannedAt,
       autoRescan: this.automaticRescanStatus()
-    }, integrity ? { integrity } : undefined);
+    }, {
+      ...(integrity ? { integrity } : {}),
+      databaseRows: this.options.database.adminLibraryOverviewRows()
+    });
   }
 
   async checkIntegrity() {
