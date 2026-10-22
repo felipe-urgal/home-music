@@ -278,7 +278,7 @@ if [[ ${EUID} -ne 0 ]]; then
 fi
 
 if [[ $# -ne 1 ]]; then
-  echo "Uso: home-music-service-control <check|stop|restart>" >&2
+  echo "Uso: home-music-service-control <check|start|stop|restart>" >&2
   exit 2
 fi
 
@@ -291,6 +291,9 @@ case "$1" in
   check)
     "${SYSTEMCTL_BIN}" cat "${SERVICE_UNIT}" >/dev/null
     ;;
+  start)
+    "${SYSTEMCTL_BIN}" start "${SERVICE_UNIT}"
+    ;;
   stop)
     "${SYSTEMCTL_BIN}" stop "${SERVICE_UNIT}"
     ;;
@@ -298,14 +301,14 @@ case "$1" in
     "${SYSTEMCTL_BIN}" restart "${SERVICE_UNIT}"
     ;;
   *)
-    echo "Ação não permitida. Use check, stop ou restart." >&2
+    echo "Ação não permitida. Use check, start, stop ou restart." >&2
     exit 2
     ;;
 esac
 EOF_HELPER
 
   cat > "${TMP_SUDOERS}" <<EOF_SUDOERS
-${RUN_USER} ALL=(root) NOPASSWD: ${CONTROL_HELPER_PATH} check, ${CONTROL_HELPER_PATH} stop, ${CONTROL_HELPER_PATH} restart
+${RUN_USER} ALL=(root) NOPASSWD: ${CONTROL_HELPER_PATH} check, ${CONTROL_HELPER_PATH} start, ${CONTROL_HELPER_PATH} stop, ${CONTROL_HELPER_PATH} restart
 EOF_SUDOERS
 
   chmod 0755 "${TMP_HELPER}"
@@ -360,4 +363,6 @@ else
 fi
 echo "Status:   systemctl status ${SERVICE_NAME} --no-pager"
 echo "Logs:     journalctl -u ${SERVICE_NAME} -f"
-echo "Reinício: sudo ${CONTROL_HELPER_PATH} restart"
+echo "Início:   sudo -n ${CONTROL_HELPER_PATH} start"
+echo "Parada:   sudo -n ${CONTROL_HELPER_PATH} stop"
+echo "Reinício: sudo -n ${CONTROL_HELPER_PATH} restart"
