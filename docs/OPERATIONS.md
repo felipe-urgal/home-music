@@ -26,6 +26,29 @@ npm run prod:logs
 
 O Dev Dashboard consome o mesmo contrato em `.dev-dashboard/production.json`.
 
+## Controle de ciclo de vida local (independente de deploy)
+
+Após `npm run service:install`, o instalador publica o helper fixo
+`/usr/local/sbin/home-music-service-control` pertencente a root (0755)
+e uma regra sudoers NOPASSWD específica para o usuário instalador.
+O helper aceita **somente** `check`, `start`, `stop`, `restart`, sempre
+sobre `home-music.service`. O Dev Dashboard poderá usá-lo sem atualizar
+código, criar build, alterar boot ou executar migrações.
+
+```bash
+systemctl is-active home-music.service
+sudo -n /usr/local/sbin/home-music-service-control check
+sudo -n /usr/local/sbin/home-music-service-control start
+sudo -n /usr/local/sbin/home-music-service-control stop
+sudo -n /usr/local/sbin/home-music-service-control restart
+curl -f http://127.0.0.1:8787/ready
+```
+
+**Instalações anteriores** devem executar novamente `npm run service:install`
+para atualizar o helper e sua regra sudoers; `service:update` não altera
+nenhuma permissão instalada. Esta reinstalação requer privilégios explícitos
+e reinicia o serviço; **não** é necessária a cada start/stop.
+
 ## Backup e restore
 
 ```bash

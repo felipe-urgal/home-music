@@ -15,7 +15,7 @@ EXPECTED_STOP='run_privileged_update_action stop'
 EXPECTED_RESTART='run_privileged_update_action restart'
 EXPECTED_SYSTEMCTL='SYSTEMCTL_BIN="/usr/bin/systemctl"'
 EXPECTED_ARG_GUARD='if [[ $# -ne 1 ]]; then'
-EXPECTED_SUDOERS='${RUN_USER} ALL=(root) NOPASSWD: ${CONTROL_HELPER_PATH} check, ${CONTROL_HELPER_PATH} stop, ${CONTROL_HELPER_PATH} restart'
+EXPECTED_SUDOERS='${RUN_USER} ALL=(root) NOPASSWD: ${CONTROL_HELPER_PATH} check, ${CONTROL_HELPER_PATH} start, ${CONTROL_HELPER_PATH} stop, ${CONTROL_HELPER_PATH} restart'
 EXPECTED_RUNTIME_HELPER='RUNTIME_PATHS_SCRIPT="${ROOT_DIR}/scripts/systemd-runtime-paths.mjs"'
 EXPECTED_STRICT_FS='ProtectSystem=strict'
 EXPECTED_READ_ONLY='${ROOT_READ_ONLY_DIRECTIVE}'
@@ -59,7 +59,7 @@ assert_contains "${EXPECTED_STOP}" "service:update precisa parar o serviço some
 assert_contains "${EXPECTED_RESTART}" "service:update precisa reiniciar o serviço somente pelo helper limitado."
 assert_exact_line "${EXPECTED_SYSTEMCTL}" "o helper precisa usar /usr/bin/systemctl fixo, sem PATH controlável."
 assert_exact_line "${EXPECTED_ARG_GUARD}" "o helper precisa recusar argumentos extras."
-assert_exact_line "${EXPECTED_SUDOERS}" "a regra sudoers precisa limitar exatamente check, stop e restart do helper."
+assert_exact_line "${EXPECTED_SUDOERS}" "a regra sudoers precisa limitar exatamente check, start, stop e restart do helper."
 assert_exact_line "${EXPECTED_RUNTIME_HELPER}" "o installer precisa calcular a política de runtime por helper versionado."
 assert_exact_line "${EXPECTED_STRICT_FS}" "o serviço precisa usar ProtectSystem=strict."
 assert_exact_line "${EXPECTED_READ_ONLY}" "o diretório do projeto precisa ser explicitamente somente leitura."
@@ -144,9 +144,10 @@ bash -n "${HELPER_FIXTURE}"
 
 if ! grep -Fqx 'case "$1" in' "${HELPER_FIXTURE}" || \
    ! grep -Fqx '  check)' "${HELPER_FIXTURE}" || \
+   ! grep -Fqx '  start)' "${HELPER_FIXTURE}" || \
    ! grep -Fqx '  stop)' "${HELPER_FIXTURE}" || \
    ! grep -Fqx '  restart)' "${HELPER_FIXTURE}"; then
-  echo "Erro: o helper precisa manter catálogo fechado de check, stop e restart." >&2
+  echo "Erro: o helper precisa manter catálogo fechado de check, start, stop e restart." >&2
   exit 1
 fi
 
@@ -156,7 +157,7 @@ if grep -Fq '"$@"' "${HELPER_FIXTURE}"; then
 fi
 
 cat > "${SUDOERS_FIXTURE}" <<'EOF_SUDOERS'
-runner ALL=(root) NOPASSWD: /usr/local/sbin/home-music-service-control check, /usr/local/sbin/home-music-service-control stop, /usr/local/sbin/home-music-service-control restart
+runner ALL=(root) NOPASSWD: /usr/local/sbin/home-music-service-control check, /usr/local/sbin/home-music-service-control start, /usr/local/sbin/home-music-service-control stop, /usr/local/sbin/home-music-service-control restart
 EOF_SUDOERS
 chmod 0440 "${SUDOERS_FIXTURE}"
 
@@ -229,3 +230,13 @@ if node "${RUNTIME_PATHS_HELPER}" "${POLICY_ROOT}" "${POLICY_ROOT}/.env" >/dev/n
 fi
 
 echo "Systemd startup preserva privilégio mínimo, downtime mínimo, paths quoted e filesystem somente leitura fora dos paths runtime necessários."
+
+# Não aceitar unidade dinâmica nem encaminhar parâmetros arbitrários.
+if ! grep -Fqx 'SERVICE_UNIT="home-music.service"' "${HELPER_FIXTURE}"; then
+  echo "Erro: helper deve manter home-music.service literal." >&2
+  exit 1
+fi
+if grep -Eq '\$[@*2]' "${HELPER_FIXTURE}"; then
+  echo "Erro: helper não pode encaminhar unidade nem argumentos extras." >&2
+  exit 1
+fi
