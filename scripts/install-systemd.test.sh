@@ -231,8 +231,12 @@ fi
 
 echo "Systemd startup preserva privilégio mínimo, downtime mínimo, paths quoted e filesystem somente leitura fora dos paths runtime necessários."
 
-# O helper permite somente uma ação literal e um único unit de sistema.
-if grep -Eq '\$\{SYSTEMCTL_BIN\}.*\$\{' "${HELPER_FIXTURE}"; then
-  echo "Erro: helper não pode usar unit controlada por variável externa." >&2
+# Não aceitar unidade dinâmica nem encaminhar parâmetros arbitrários.
+if ! grep -Fqx 'SERVICE_UNIT="home-music.service"' "${HELPER_FIXTURE}"; then
+  echo "Erro: helper deve manter home-music.service literal." >&2
+  exit 1
+fi
+if grep -Eq '\$[@*2]' "${HELPER_FIXTURE}"; then
+  echo "Erro: helper não pode encaminhar unidade nem argumentos extras." >&2
   exit 1
 fi
