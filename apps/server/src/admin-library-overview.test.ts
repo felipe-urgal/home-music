@@ -230,7 +230,7 @@ test('não permite tamanho negativo contaminar o armazenamento', async () => {
 // instead of constructing a separate read-only connection per HTTP request.
 test('usa snapshot SQLite do owner e preserva overrides, capas e quarentena', async () => {
   const db = new DatabaseSync(':memory:');
-  let rows;
+  let rows: ReturnType<typeof readAdminLibraryOverviewRows>;
   try {
     db.exec(`
       CREATE TABLE track_metadata_overrides (

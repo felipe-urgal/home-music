@@ -15,7 +15,6 @@ import { readAdminLibraryOverviewRows, type AdminLibraryOverviewRows } from './a
 import type { IndexedTrack } from './library.js';
 
 type ScannerState = AdminLibraryOverviewResponse['scanner'];
-type Row = Record<string, unknown>;
 
 type AdminLibraryOverviewOptions = {
   databasePath?: string;
