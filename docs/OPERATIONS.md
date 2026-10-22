@@ -49,6 +49,17 @@ para atualizar o helper e sua regra sudoers; `service:update` não altera
 nenhuma permissão instalada. Esta reinstalação requer privilégios explícitos
 e reinicia o serviço; **não** é necessária a cada start/stop.
 
+## Observabilidade de migrations SQLite
+
+Ao abrir a conexão principal, o servidor registra uma linha `SQLite migration:`
+em stderr com `status` (`success` ao atualizar o schema, `skipped` se já
+estiver atualizado, ou `failed`), `fromVersion`, `toVersion` e
+`durationMs` (relógio monotônico). Se a migration falhar, `toVersion=unknown`
+não pressupõe que a versão tenha sido confirmada; consulte a causa original
+da falha antes de tentar iniciar o serviço novamente. A linha de métricas não
+inclui caminho físico do banco, conteúdo das tabelas, hashes ou credenciais.
+Ela não substitui backup pré-upgrade nem os testes de integridade.
+
 ## Backup e restore
 
 ```bash
