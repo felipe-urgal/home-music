@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process';
+import { performance } from 'node:perf_hooks';
 import { fileURLToPath } from 'node:url';
 import { config } from 'dotenv';
 import { databaseIsOpenByAnotherProcess } from './backup-process-guard.js';
@@ -47,6 +48,9 @@ async function restoreOfflineBlocker(databasePath: string) {
 }
 
 const command = process.argv[2];
+const operationStartedAt = performance.now();
+let operationStatus: 'success' | 'blocked' | 'failed' = 'failed';
+let operationSchemaVersion: number | null = null;
 const databasePath = process.env.HOME_MUSIC_DATABASE_PATH || defaultDatabasePath;
 const backups = new BackupService({
   databasePath,
@@ -58,6 +62,8 @@ const backups = new BackupService({
 try {
   if (command === 'create') {
     const result = await backups.create(argumentValue('--output'));
+    operationSchemaVersion = result.manifest.database.schemaVersion;
+    operationStatus = 'success';
     console.log(`Backup criado e validado: ${result.artifactPath}`);
     console.log(`SQLite: ${result.manifest.database.bytes} bytes · schema ${result.manifest.database.schemaVersion}`);
     console.log(`SHA-256: ${result.manifest.database.sha256}`);
@@ -69,6 +75,8 @@ try {
       process.exitCode = 2;
     } else {
       const result = await backups.verify(artifact);
+      operationSchemaVersion = result.manifest.database.schemaVersion;
+      operationStatus = 'success';
       console.log(`Backup válido: ${result.artifactPath}`);
       console.log(`SQLite íntegro · schema ${result.manifest.database.schemaVersion} · ${result.manifest.database.bytes} bytes`);
       console.log(`SHA-256: ${result.manifest.database.sha256}`);
@@ -85,13 +93,16 @@ try {
     } else {
       const result = await backups.restore(artifact, {
         onVerified: verified => {
+          operationSchemaVersion = verified.manifest.database.schemaVersion;
           console.log(`Artefato validado antes do restore: ${verified.manifest.database.sha256}`);
         }
       });
       if (result.blocked !== null) {
+        operationStatus = 'blocked';
         console.error(result.blocked);
         process.exitCode = 1;
       } else {
+        operationStatus = 'success';
         console.log(`Restore concluído com rollback protegido: ${result.restored.databasePath}`);
         console.log('O .env não foi sobrescrito automaticamente. Revise manifest.json para reaplicar apenas configurações operacionais necessárias.');
         console.log('Inicie o serviço e valide /ready + login antes de remover ou arquivar o backup.');
@@ -107,4 +118,12 @@ try {
     console.error('Rollback automático também falhou. Não inicie o serviço antes de preservar data/ e inspecionar o estado manualmente.');
   }
   process.exitCode = 1;
+} finally {
+  // Metrics have a fixed set of fields; never include paths, hashes or credentials.
+  if (command === 'create' || command === 'verify' || command === 'restore') {
+    const durationMs = Math.max(0, Math.round(performance.now() - operationStartedAt));
+    console.error(
+      `Backup operation: operation=${command} status=${operationStatus} schemaVersion=${operationSchemaVersion ?? 'unknown'} durationMs=${durationMs}`
+    );
+  }
 }

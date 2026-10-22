@@ -52,10 +52,24 @@ e reinicia o serviço; **não** é necessária a cada start/stop.
 ## Backup e restore
 
 ```bash
-npm run backup:create -- <destino>
-npm run backup:verify -- <artefato>
-npm run backup:restore -- <artefato>
+npm run backup:create -- --output <diretorio>
+npm run backup:verify -- --artifact <diretorio.backup>
+npm run backup:restore -- --artifact <diretorio.backup> --confirm-service-stopped
 ```
+
+Os comandos `backup:create`, `backup:verify` e `backup:restore` registram, ao
+terminar, `operation`, `status` (`success`, `blocked` ou `failed`),
+`schemaVersion` (ou `unknown`) e `durationMs` em stderr. Essas métricas
+não incluem caminho do banco, credenciais, hashes nem conteúdo do manifesto;
+não substituem logs de erro ou a validação do artefato. Um restore bloqueado
+não deve ser tratado como sucesso, mesmo que a verificação inicial tenha passado.
+
+O SQLite principal usa WAL e `synchronous=NORMAL`: essa combinação prioriza
+throughput sem dispensar backups verificados e um procedimento de restore
+offline. Não alterar para `FULL` sem medir custo e requisito de durabilidade
+do ambiente. O guard automático de processos no restore depende do Linux
+(`/proc`); em outras plataformas a confirmação operacional de que o serviço
+está parado continua indispensável.
 
 Restore real não deve ser usado como teste. O smoke seguro é:
 
