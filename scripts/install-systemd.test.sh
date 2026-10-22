@@ -25,6 +25,11 @@ EXPECTED_ROOT_QUOTING='ROOT_READ_ONLY_DIRECTIVE="ReadOnlyPaths=\"${ROOT_PATH_ESC
 EXPECTED_WRITE_QUOTING='    RUNTIME_READ_WRITE_DIRECTIVES+=("ReadWritePaths=\"$(systemd_quote_value "${runtime_path}")\"")'
 EXPECTED_WORKING_DIRECTORY='WorkingDirectory=${ROOT_PATH_ESCAPED}'
 EXPECTED_STABILITY_CHECK='if ! verify_service_stable; then'
+EXPECTED_TAILSCALE_DISCOVERY='if [[ "${MODE}" == "install" ]] && systemctl cat tailscaled.service >/dev/null 2>&1; then'
+EXPECTED_TAILSCALE_AFTER='After=network-online.target local-fs.target${TAILSCALE_AFTER}'
+EXPECTED_TAILSCALE_WANTS='Wants=network-online.target${TAILSCALE_WANTS}'
+EXPECTED_TAILSCALE_SUFFIX='  TAILSCALE_AFTER=" tailscaled.service"'
+EXPECTED_TAILSCALE_WANTS_SUFFIX='  TAILSCALE_WANTS=" tailscaled.service"'
 
 assert_exact_line() {
   local expected="$1"
@@ -69,6 +74,17 @@ assert_exact_line "${EXPECTED_ROOT_QUOTING}" "ReadOnlyPaths precisa usar valor q
 assert_exact_line "${EXPECTED_WRITE_QUOTING}" "ReadWritePaths precisa usar valor quoted do systemd para preservar espaços."
 assert_exact_line "${EXPECTED_WORKING_DIRECTORY}" "WorkingDirectory precisa permanecer um path absoluto sem aspas literais."
 assert_exact_line "${EXPECTED_STABILITY_CHECK}" "installer precisa confirmar que o serviço permaneceu ativo após o restart."
+assert_exact_line "${EXPECTED_TAILSCALE_DISCOVERY}" "a instalação precisa detectar tailscaled.service apenas se presente."
+assert_exact_line "${EXPECTED_TAILSCALE_AFTER}" "a ordem de inicialização opcional do Tailscale deve constar do unit."
+assert_exact_line "${EXPECTED_TAILSCALE_WANTS}" "o Home Music deve iniciar Tailscale sem dependência obrigatória."
+assert_exact_line "${EXPECTED_TAILSCALE_SUFFIX}" "a dependência After opcional deve referenciar tailscaled.service literal."
+assert_exact_line "${EXPECTED_TAILSCALE_WANTS_SUFFIX}" "a dependência Wants opcional deve referenciar tailscaled.service literal."
+
+if sed -n '/^  cat > "${TMP_SERVICE}" <<EOF_SERVICE$/,/^EOF_SERVICE$/p' "${INSTALLER}" |
+    grep -Eq '^(Requires|BindsTo|PartOf)=.*tailscaled\.service'; then
+  echo "Erro: Home Music não pode depender obrigatoriamente nem parar junto com tailscaled." >&2
+  exit 1
+fi
 
 if grep -Fq 'WorkingDirectory="${ROOT_PATH_ESCAPED}"' "${INSTALLER}"; then
   echo "Erro: WorkingDirectory não pode usar aspas literais; systemd deixa de reconhecer o path como absoluto." >&2
