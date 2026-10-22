@@ -343,7 +343,13 @@ export class HomeMusicDatabase {
   }
 
   private migrate() {
-    let version = this.schemaVersion();
+    const startedAt = performance.now();
+    let startingVersion: number | null = null;
+    let endingVersion: number | null = null;
+    let migrationStatus: 'success' | 'skipped' | 'failed' = 'failed';
+    try {
+      let version = this.schemaVersion();
+      startingVersion = version;
 
     if (version < 1) {
       this.runAtomicLegacyMigration(1, () => {
@@ -1154,8 +1160,17 @@ export class HomeMusicDatabase {
       }
     }
 
-    if (version !== CURRENT_SCHEMA_VERSION) {
-      throw new Error(`Versão de schema SQLite não suportada: ${version}`);
+      if (version !== CURRENT_SCHEMA_VERSION) {
+        throw new Error(`Versão de schema SQLite não suportada: ${version}`);
+      }
+      endingVersion = version;
+      migrationStatus = version === startingVersion ? 'skipped' : 'success';
+    } finally {
+      // Fixed, bounded fields only: never log database paths or stored data.
+      const durationMs = Math.max(0, Math.round(performance.now() - startedAt));
+      console.error(
+        `SQLite migration: status=${migrationStatus} fromVersion=${startingVersion ?? 'unknown'} toVersion=${endingVersion ?? 'unknown'} durationMs=${durationMs}`
+      );
     }
   }
 
