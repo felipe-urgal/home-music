@@ -11,6 +11,7 @@ import type {
   Track
 } from '@home-music/shared';
 import { getLibraryIntegrityStatus } from './library-integrity.js';
+import { readAdminLibraryOverviewRows, type AdminLibraryOverviewRows } from './admin-library-overview-rows.js';
 import type { IndexedTrack } from './library.js';
 
 type ScannerState = AdminLibraryOverviewResponse['scanner'];
@@ -19,6 +20,7 @@ type Row = Record<string, unknown>;
 type AdminLibraryOverviewOptions = {
   databasePath?: string;
   databaseBytes?: number | null;
+  databaseRows?: AdminLibraryOverviewRows;
   integrity?: AdminLibraryIntegrityStatus;
   resolveTrack?: (track: IndexedTrack) => Track;
   isTrackHidden?: (track: IndexedTrack) => boolean;
@@ -77,24 +79,7 @@ function scannerFallbackTitle(track: IndexedTrack) {
   return path.basename(track.filePath, extension);
 }
 
-function defaultDatabaseState(databasePath: string) {
-  const db = new DatabaseSync(databasePath, { readOnly: true });
-  let metadataRows: Row[];
-  let coverRows: Row[];
-  let hiddenRows: Row[];
-  try {
-    db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
-    metadataRows = db.prepare(`
-      SELECT track_id, title, artist, album, album_artist
-      FROM track_metadata_overrides;
-    `).all() as Row[];
-    coverRows = db.prepare('SELECT track_id FROM track_cover_overrides;').all() as Row[];
-    hiddenRows = db.prepare('SELECT track_id FROM media_quarantine;').all() as Row[];
-  } catch (error) {
-    try { db.close(); } catch { /* Preserve the SQLite initialization error. */ }
-    throw error;
-  }
-
+function databaseStateFromRows({ metadataRows, coverRows, hiddenRows }: AdminLibraryOverviewRows) {
   const metadataOverrides = new Map<string, MetadataOverride>(metadataRows.map(row => [
     stringValue(row.track_id),
     {
@@ -126,9 +111,25 @@ function defaultDatabaseState(databasePath: string) {
       return hiddenTrackIds.has(track.id);
     },
     close() {
-      db.close();
+      // Borrowed snapshots do not own the SQLite connection.
     }
   };
+}
+
+function defaultDatabaseState(databasePath: string) {
+  // Standalone callers retain the read-only fallback; production injects rows
+  // from HomeMusicDatabase and never opens a connection for this overview.
+  const db = new DatabaseSync(databasePath, { readOnly: true });
+  try {
+    db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
+    return {
+      ...databaseStateFromRows(readAdminLibraryOverviewRows(db)),
+      close() { db.close(); }
+    };
+  } catch (error) {
+    try { db.close(); } catch { /* Preserve the SQLite read error. */ }
+    throw error;
+  }
 }
 
 async function readTitleTagPresent(track: IndexedTrack) {
@@ -198,7 +199,9 @@ export async function buildAdminLibraryOverview(
   const integrity = options.integrity ?? getLibraryIntegrityStatus();
   const databaseState = options.resolveTrack && options.isTrackHidden && options.hasTitleOverride
     ? null
-    : defaultDatabaseState(databasePath);
+    : options.databaseRows
+      ? databaseStateFromRows(options.databaseRows)
+      : defaultDatabaseState(databasePath);
   const resolveTrack = options.resolveTrack ?? (track => databaseState!.resolve(track));
   const isTrackHidden = options.isTrackHidden ?? (track => databaseState!.isHidden(track));
   const hasTitleOverride = options.hasTitleOverride ?? (track => databaseState!.hasTitleOverride(track));

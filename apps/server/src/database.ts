@@ -9,6 +9,7 @@ import { RHYTHM_ANALYZER_VERSION } from './rhythm-analysis.js';
 import { KEY_ANALYZER_VERSION } from './key-analysis.js';
 import { WAVEFORM_ANALYZER_VERSION } from './waveform-analysis.js';
 import { CURRENT_SCHEMA_VERSION, SQLITE_BUSY_TIMEOUT_MS } from './sqlite-settings.js';
+import { readAdminLibraryOverviewRows } from './admin-library-overview-rows.js';
 
 const HISTORY_CAPACITY = 2_000;
 const TRACK_UPSERT_SQL = `
@@ -306,6 +307,11 @@ export class HomeMusicDatabase {
       }
       throw error;
     }
+  }
+
+  adminLibraryOverviewRows() {
+    // Read the same current SQLite state without a short-lived second connection.
+    return readAdminLibraryOverviewRows(this.db);
   }
 
   private schemaVersion() {

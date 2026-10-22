@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { DatabaseSync } from 'node:sqlite';
+import { readAdminLibraryOverviewRows } from './admin-library-overview-rows.js';
 import { buildAdminLibraryOverview } from './admin-library-overview.js';
 import type { IndexedTrack } from './library.js';
 
@@ -222,4 +224,52 @@ test('não permite tamanho negativo contaminar o armazenamento', async () => {
   ], scanner, deterministicOptions);
 
   assert.equal(overview.storage.libraryBytes, 500);
+});
+
+// The production overview consumes the rows read by the existing SQLite owner,
+// instead of constructing a separate read-only connection per HTTP request.
+test('usa snapshot SQLite do owner e preserva overrides, capas e quarentena', async () => {
+  const db = new DatabaseSync(':memory:');
+  let rows;
+  try {
+    db.exec(`
+      CREATE TABLE track_metadata_overrides (
+        track_id TEXT PRIMARY KEY, title TEXT, artist TEXT, album TEXT, album_artist TEXT
+      );
+      CREATE TABLE track_cover_overrides (track_id TEXT PRIMARY KEY);
+      CREATE TABLE media_quarantine (track_id TEXT PRIMARY KEY);
+      INSERT INTO track_metadata_overrides (track_id, title, artist, album, album_artist)
+      VALUES ('edited', 'Título corrigido', NULL, 'Álbum corrigido', NULL);
+      INSERT INTO track_cover_overrides (track_id) VALUES ('edited');
+      INSERT INTO media_quarantine (track_id) VALUES ('hidden');
+    `);
+    rows = readAdminLibraryOverviewRows(db);
+  } finally {
+    db.close();
+  }
+
+  const overview = await buildAdminLibraryOverview([
+    track({
+      id: 'edited', title: 'track', artist: 'Artista desconhecido',
+      album: 'Álbum desconhecido', hasCover: false
+    }),
+    track({
+      id: 'hidden', title: 'hidden', filePath: '/music/hidden.mp3',
+      hasCover: false, fileSize: 99
+    })
+  ], scanner, {
+    databaseRows: rows,
+    databasePath: '/not-a-real-directory/home-music.db',
+    databaseBytes: 10,
+    integrity,
+    resolveTitleTagPresent: () => false
+  });
+
+  assert.deepEqual(overview.tracks, { total: 1 });
+  assert.equal(overview.storage.libraryBytes, 1_000);
+  assert.equal(overview.problems.missingTitle, 0);
+  assert.equal(overview.problems.missingCover, 0);
+  assert.equal(overview.problems.unknownArtist, 1);
+  assert.equal(overview.problems.unknownAlbum, 0);
+  assert.deepEqual(overview.problems.trackIds.unknownArtist, ['edited']);
 });
