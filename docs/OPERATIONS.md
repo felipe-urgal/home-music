@@ -78,9 +78,21 @@ não deve ser tratado como sucesso, mesmo que a verificação inicial tenha pass
 O SQLite principal usa WAL e `synchronous=NORMAL`: essa combinação prioriza
 throughput sem dispensar backups verificados e um procedimento de restore
 offline. Não alterar para `FULL` sem medir custo e requisito de durabilidade
-do ambiente. O guard automático de processos no restore depende do Linux
-(`/proc`); em outras plataformas a confirmação operacional de que o serviço
-está parado continua indispensável.
+do ambiente. O restore **não** para serviços automaticamente. Antes de executar o
+comando, pare `home-music.service` e quaisquer processos de desenvolvimento
+(`npm run dev`/`npm start`) que possam estar com o banco aberto. O parâmetro
+`--confirm-service-stopped` é uma confirmação operacional, **não** prova de
+que o processo foi encerrado. O CLI verifica o estado de `home-music.service`
+quando `systemctl` está disponível e bloqueia o restore se estiver ativo.
+
+A detecção adicional de descritores SQLite (`db`, `-wal`, `-shm`) usa
+`/proc` **somente no Linux**. Se a enumeração principal de `/proc` falhar,
+o restore é bloqueado em vez de presumir ausência de processos. Entradas de
+processos individuais podem estar inacessíveis por permissão, então a
+verificação automática é uma proteção complementar, não substitui a conferência
+operacional. Em outras plataformas ou hosts sem `systemctl`, o operador precisa
+confirmar manualmente que não há processos usando os arquivos antes do restore.
+O guard é reexecutado imediatamente antes da troca de banco.
 
 Restore real não deve ser usado como teste. O smoke seguro é:
 
