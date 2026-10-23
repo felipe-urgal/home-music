@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import test from 'node:test';
-import { BackupService, BackupValidationError } from './backup-service.js';
+import { BackupService, BackupValidationError, RestoreRollbackError, backupServiceErrorMessage } from './backup-service.js';
 
 function writeDatabase(databasePath: string, value: string) {
   const db = new DatabaseSync(databasePath);
@@ -66,4 +66,33 @@ test('backup service rechecks offline guard immediately before restore replaceme
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test('backup errors classify I/O failures without leaking OS paths, secrets or hashes', () => {
+  const sensitivePath = '/private/app/private-test-secret/home-music.db';
+  const errno = (code: string) =>
+    Object.assign(new Error(`EIO: ${sensitivePath} password=private-test-secret sha256=abc`), { code });
+
+  for (const code of ['ENOSPC', 'EDQUOT']) {
+    assert.match(backupServiceErrorMessage(errno(code)), /Espaço insuficiente/);
+  }
+  for (const code of ['EACCES', 'EPERM']) {
+    assert.match(backupServiceErrorMessage(errno(code)), /Permissão insuficiente/);
+  }
+  assert.match(backupServiceErrorMessage(errno('EROFS')), /somente leitura/);
+  assert.match(backupServiceErrorMessage(errno('ENOTDIR')), /Falha de I\/O/);
+
+  for (const error of [errno('EIO'), errno('ENOSPC'), errno('EACCES'), new Error(sensitivePath)]) {
+    const message = backupServiceErrorMessage(error);
+    assert.doesNotMatch(message, /private|home-music\.db|password|sha256/i);
+  }
+
+  assert.equal(
+    backupServiceErrorMessage(new BackupValidationError('Backup inválido.')),
+    'Backup inválido.'
+  );
+  assert.match(
+    backupServiceErrorMessage(new RestoreRollbackError(errno('EIO'), errno('ENOSPC'))),
+    /rollback automático também falhou/
+  );
 });
