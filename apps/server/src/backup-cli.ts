@@ -41,8 +41,13 @@ async function restoreOfflineBlocker(databasePath: string) {
   if (homeMusicServiceIsActive()) {
     return 'home-music.service ainda está ativo. Execute sudo systemctl stop home-music antes do restore.';
   }
-  if (await databaseIsOpenByAnotherProcess(databasePath)) {
-    return 'O SQLite ainda está aberto por outro processo. Pare npm run dev/npm start ou qualquer processo que esteja usando o banco antes do restore.';
+  try {
+    if (await databaseIsOpenByAnotherProcess(databasePath)) {
+      return 'O SQLite ainda está aberto por outro processo. Pare npm run dev/npm start ou qualquer processo que esteja usando o banco antes do restore.';
+    }
+  } catch {
+    // No unverified restore when the Linux process inventory is unavailable.
+    return 'Não foi possível inspecionar os processos que usam o SQLite. Verifique o acesso a /proc e mantenha o serviço parado antes do restore.';
   }
   return null;
 }
