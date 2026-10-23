@@ -136,6 +136,12 @@ function databaseInfo(databasePath: string) {
     if (!integrityOk) {
       throw new BackupValidationError('O SQLite do backup falhou no PRAGMA integrity_check.');
     }
+    // integrity_check validates SQLite pages/indices, not relational constraints.
+    // A single violating row is enough to reject the snapshot without exposing row data.
+    const brokenReference = db.prepare('PRAGMA foreign_key_check;').get() as Row | undefined;
+    if (brokenReference) {
+      throw new BackupValidationError('O SQLite do backup falhou no PRAGMA foreign_key_check.');
+    }
     const schemaRow = db.prepare('PRAGMA user_version;').get() as Row | undefined;
     const schemaVersion = Number(firstValue(schemaRow));
     if (!Number.isInteger(schemaVersion) || schemaVersion < 0) {
