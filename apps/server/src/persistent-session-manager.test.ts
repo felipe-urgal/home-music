@@ -233,6 +233,7 @@ test('persistent sessions use the shared timeout and fail explicitly on a held S
     } finally {
       t.mock.restoreAll();
     }
+    assert.ok(manager);
     assert.ok(
       pragmas.includes(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`),
       'the session connection must use the shared SQLite timeout, not a hard-coded value'
@@ -243,7 +244,7 @@ test('persistent sessions use the shared timeout and fail explicitly on a held S
     lock.exec("UPDATE users SET updated_at = 'locked' WHERE id = 'user-1';");
     const started = Date.now();
     assert.throws(
-      () => manager!.createSessionForUser('user-1', 1_000),
+      () => manager.createSessionForUser('user-1', 1_000),
       (error: unknown) => error instanceof Error && /SQLITE_BUSY|database is locked/i.test(error.message)
     );
     assert.ok(
