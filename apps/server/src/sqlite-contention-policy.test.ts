@@ -11,8 +11,12 @@ import { HomeMusicDatabase } from './database.js';
 import { ImportDuplicateDetectionManager } from './import-duplicate-detection.js';
 import { resolveLegacyAuthBinding } from './legacy-auth-binding.js';
 import { LibraryAssistantAutonomyStore } from './library-assistant-autonomy.js';
+import { LibraryAssistantReviewPolicyStore } from './library-assistant-review-policy.js';
+import { OpenSubsonicCredentialStore } from './open-subsonic-credentials.js';
+import { TrackLyricsOverrideStore } from './track-lyrics-overrides.js';
 import { verifyPublicAccessAdmin } from './public-access-auth.js';
 import { SQLITE_BUSY_TIMEOUT_MS } from './sqlite-settings.js';
+import { DEFAULT_LIBRARY_ASSISTANT_REVIEW_POLICY } from '@home-music/shared/library-assistant';
 
 async function withDatabase(run: (databasePath: string) => Promise<void>) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'home-music-sqlite-contention-'));
@@ -161,6 +165,62 @@ test('admin overview closes connection if initial SQLite query fails', async t =
       assert.equal(closes, 1);
     } finally {
       t.mock.restoreAll();
+    }
+  });
+});
+
+test('OpenSubsonic, managed lyrics and assistant review policy use the shared SQLite timeout', async t => {
+  const cases: Array<{ name: string; open: (databasePath: string) => { close(): void } }> = [
+    { name: 'OpenSubsonic API credentials', open: p => new OpenSubsonicCredentialStore(p) },
+    { name: 'managed lyrics', open: p => new TrackLyricsOverrideStore(p) },
+    { name: 'assistant review policy', open: p => new LibraryAssistantReviewPolicyStore(p) }
+  ];
+  for (const scenario of cases) {
+    await t.test(scenario.name, async subtest => {
+      await withDatabase(async databasePath => {
+        const seen: string[] = [];
+        const nativeExec = DatabaseSync.prototype.exec;
+        subtest.mock.method(DatabaseSync.prototype, 'exec', function (this: DatabaseSync, sql: string) {
+          seen.push(sql);
+          return nativeExec.call(this, sql);
+        });
+        try {
+          const owner = scenario.open(databasePath);
+          try {
+            assert.ok(seen.includes(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`));
+            assert.ok(seen.includes('PRAGMA foreign_keys = ON;'));
+          } finally {
+            owner.close();
+          }
+        } finally {
+          subtest.mock.restoreAll();
+        }
+      });
+    });
+  }
+});
+
+test('assistant review policy write times out on a locked SQLite writer and succeeds after release', async () => {
+  await withDatabase(async databasePath => {
+    const store = new LibraryAssistantReviewPolicyStore(databasePath);
+    const writer = new DatabaseSync(databasePath);
+    try {
+      writer.exec('BEGIN IMMEDIATE;');
+      const start = Date.now();
+      assert.throws(
+        () => store.set(DEFAULT_LIBRARY_ASSISTANT_REVIEW_POLICY),
+        (error: unknown) => error instanceof Error && /SQLITE_BUSY|database is locked/i.test(error.message)
+      );
+      assert.ok(
+        Date.now() - start >= SQLITE_BUSY_TIMEOUT_MS - 1_000,
+        'the write must respect the configured bounded timeout'
+      );
+      writer.exec('ROLLBACK;');
+      assert.deepEqual(store.set(DEFAULT_LIBRARY_ASSISTANT_REVIEW_POLICY), DEFAULT_LIBRARY_ASSISTANT_REVIEW_POLICY);
+    } finally {
+      try { writer.exec('ROLLBACK;'); } catch { /* Transaction may be closed. */ }
+      writer.close();
+      store.close();
     }
   });
 });
