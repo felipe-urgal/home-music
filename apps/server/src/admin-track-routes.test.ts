@@ -328,3 +328,71 @@ test('rotas de localização movem arquivo, preservam id e incrementam revisão 
 
   await app.close();
 });
+
+
+test('admin routes release constructed SQLite stores if the next constructor fails', async t => {
+  const root = await mkdtemp(path.join(tmpdir(), 'home-music-admin-route-startup-'));
+  tempDirs.push(root);
+  const databasePath = path.join(root, 'home-music.db');
+  const musicDir = path.join(root, 'library');
+  await mkdir(musicDir, { recursive: true });
+  createTrackTable(databasePath);
+  const app = Fastify();
+  const originalError = new Error('injected cover-store initialization failure');
+  const nativeExec = DatabaseSync.prototype.exec;
+  const nativeClose = DatabaseSync.prototype.close;
+  let closed = 0;
+  t.mock.method(DatabaseSync.prototype, 'exec', function (this: DatabaseSync, sql: string) {
+    if (sql.includes('CREATE TABLE IF NOT EXISTS track_cover_overrides')) throw originalError;
+    return nativeExec.call(this, sql);
+  });
+  t.mock.method(DatabaseSync.prototype, 'close', function (this: DatabaseSync) {
+    closed++;
+    return nativeClose.call(this);
+  });
+  try {
+    assert.throws(
+      () => registerAdminTrackRoutes(app, service(), { databasePath, musicDir }),
+      error => error === originalError
+    );
+    // Two fully built owners plus the failing constructor's own DB.
+    assert.equal(closed, 3, 'all SQLite handles must close immediately on failed startup');
+    await app.close();
+    assert.equal(closed, 3, 'the onClose hook must not retry already released owners');
+  } finally {
+    t.mock.restoreAll();
+    await app.close();
+  }
+});
+
+test('admin routes close all SQLite owners on route-registration failure without double close', async t => {
+  const root = await mkdtemp(path.join(tmpdir(), 'home-music-admin-route-registration-'));
+  tempDirs.push(root);
+  const databasePath = path.join(root, 'home-music.db');
+  const musicDir = path.join(root, 'library');
+  await mkdir(musicDir, { recursive: true });
+  createTrackTable(databasePath);
+  const app = Fastify();
+  // A duplicate route throws after all SQLite stores and composite stores
+  // were created, exercising the route-registration exception path.
+  app.get('/api/admin/tracks', async () => ({ tracks: [] }));
+  const nativeClose = DatabaseSync.prototype.close;
+  let closed = 0;
+  t.mock.method(DatabaseSync.prototype, 'close', function (this: DatabaseSync) {
+    closed++;
+    return nativeClose.call(this);
+  });
+  try {
+    assert.throws(
+      () => registerAdminTrackRoutes(app, service(), { databasePath, musicDir }),
+      (error: unknown) => error instanceof Error && /already declared|duplicate|already registered/i.test(error.message)
+    );
+    // Metadata, normalization, cover, quarantine, file moves and duplicate review.
+    assert.equal(closed, 6, 'registration failure must release all six SQLite handles');
+    await app.close();
+    assert.equal(closed, 6, 'Fastify shutdown must not close a second time');
+  } finally {
+    t.mock.restoreAll();
+    await app.close();
+  }
+});
