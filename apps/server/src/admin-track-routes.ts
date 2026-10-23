@@ -131,18 +131,22 @@ export function registerAdminTrackRoutes(
   const musicDir = options.musicDir ?? process.env.MUSIC_DIR ?? '';
   // Install the owner before opening SQLite: partial route registration must
   // release every store, including when construction fails halfway through.
-  const ownedStores: Array<{ close(): void }> = [];
-  const own = <T extends { close(): void }>(store: T): T => {
-    ownedStores.push(store);
+  const ownedStores: Array<{ closeOrder: number; close(): void }> = [];
+  const own = <T extends { close(): void }>(closeOrder: number, store: T): T => {
+    ownedStores.push({ closeOrder, close: () => store.close() });
     return store;
   };
-  const closeOwned = () => closeAllSync(ownedStores.splice(0).reverse().map(store => () => store.close()));
+  // Preserve the established shutdown order while supporting partially
+  // constructed sets of owners. Each owner is consumed exactly once.
+  const closeOwned = () => closeAllSync(ownedStores.splice(0)
+    .sort((left, right) => left.closeOrder - right.closeOrder)
+    .map(store => store.close));
   app.addHook('onClose', async () => { closeOwned(); });
 
   try {
-  const metadataOverrides = own(new TrackMetadataOverrideStore(databasePath));
-  const metadataNormalization = own(new LibraryMetadataNormalizationStore(databasePath));
-  const coverOverrides = own(new TrackCoverOverrideStore(databasePath));
+  const metadataOverrides = own(30, new TrackMetadataOverrideStore(databasePath));
+  const metadataNormalization = own(20, new LibraryMetadataNormalizationStore(databasePath));
+  const coverOverrides = own(10, new TrackCoverOverrideStore(databasePath));
   let metadataRevision = 0;
   let normalizationRevision = 0;
   let coverRevision = 0;
@@ -207,7 +211,7 @@ export function registerAdminTrackRoutes(
     }
   }
 
-  const mutations = own(new AdminTrackMutationService({
+  const mutations = own(50, new AdminTrackMutationService({
     databasePath,
     musicDir,
     tracks: service,
@@ -218,7 +222,7 @@ export function registerAdminTrackRoutes(
     },
     onFileMoved: () => { fileRevision += 1; }
   }));
-  const duplicateReview = own(new LibraryDuplicateReviewStore({
+  const duplicateReview = own(40, new LibraryDuplicateReviewStore({
     databasePath,
     musicDir,
     isHidden: trackId => mutations.hasHidden(trackId)
