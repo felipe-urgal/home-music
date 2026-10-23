@@ -206,7 +206,8 @@ function parseManifest(value: unknown): BackupManifest {
   const safeConfig: Record<string, string> = {};
   for (const [key, rawValue] of Object.entries(config)) {
     if (!SAFE_CONFIG_KEY_SET.has(key) || typeof rawValue !== 'string') {
-      throw new BackupValidationError(`Configuração não permitida no manifesto: ${key}.`);
+      // Manifest keys are untrusted. Never echo them into CLI errors/metrics.
+      throw new BackupValidationError('Configuração não permitida no manifesto.');
     }
     safeConfig[key] = rawValue;
   }

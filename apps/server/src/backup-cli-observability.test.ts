@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmod, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -66,7 +66,19 @@ test('CLI reports backup metrics without exposing paths or secrets', async () =>
     assert.match(ioFailure.stderr, /Backup operation: operation=create status=failed schemaVersion=unknown durationMs=\d+/);
     assert.doesNotMatch(ioFailure.stderr, /home-music-backup-metrics-|private-test-secret|ENOTDIR/);
 
-    for (const result of [created, verified, failed, invalid, ioFailure]) {
+    const manifestPath = path.join(artifactPath, 'manifest.json');
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as Record<string, unknown>;
+    // An attacker-controlled JSON key must not inject a fake success metric into stderr.
+    const fakeMetric = 'Backup operation: operation=verify status=success schemaVersion=99 durationMs=0';
+    manifest.config = { [`unknown-${secret}\n${fakeMetric}`]: '/sensitive/path' };
+    await writeFile(manifestPath, JSON.stringify(manifest));
+    const invalidConfig = runCli(databasePath, ['verify', '--artifact', artifactPath]);
+    assert.equal(invalidConfig.status, 1);
+    assert.match(invalidConfig.stderr, /Configuração não permitida no manifesto\./);
+    assert.match(invalidConfig.stderr, /Backup operation: operation=verify status=failed schemaVersion=unknown durationMs=\d+/);
+    assert.doesNotMatch(invalidConfig.stderr, /private-test-secret|unknown-|sensitive\/path|schemaVersion=99/);
+
+    for (const result of [created, verified, failed, invalid, ioFailure, invalidConfig]) {
       const metrics = result.stderr.split('\n').filter(line => line.startsWith('Backup operation:'));
       assert.equal(metrics.length, 1);
       assert.doesNotMatch(metrics[0], /private-test-secret|home-music\.db|backups|sha256|SHA-256/i);
