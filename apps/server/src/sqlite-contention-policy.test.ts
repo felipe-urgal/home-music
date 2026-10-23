@@ -12,6 +12,9 @@ import { ImportDuplicateDetectionManager } from './import-duplicate-detection.js
 import { resolveLegacyAuthBinding } from './legacy-auth-binding.js';
 import { LibraryAssistantAutonomyStore } from './library-assistant-autonomy.js';
 import { LibraryAssistantReviewPolicyStore } from './library-assistant-review-policy.js';
+import { LibraryAssistantPersistentQueue } from './library-assistant-persistent-queue.js';
+import { LibraryAssistantFingerprintCache } from './library-assistant-fingerprint-cache.js';
+import { LibraryAssistantIncrementalIndex } from './library-assistant-incremental-index.js';
 import { AccountPasswordService } from './account-password.js';
 import { AdminUsersService } from './admin-users.js';
 import { AdminOperationHistoryStore } from './admin-operation-history.js';
@@ -437,6 +440,74 @@ test('admin operation history write times out on a held SQLite lock without reco
       try { writer.exec('ROLLBACK;'); } catch { /* Transaction already finished. */ }
       writer.close();
       store.close();
+    }
+  });
+});
+
+
+test('assistant queue, incremental index and fingerprint cache use shared bounded SQLite timeout', async t => {
+  const cases: Array<{ name: string; open: (databasePath: string) => { close(): void }; hasWal: boolean }> = [
+    { name: 'persistent work queue', open: p => new LibraryAssistantPersistentQueue(p), hasWal: true },
+    { name: 'incremental analysis index', open: p => new LibraryAssistantIncrementalIndex(p), hasWal: true },
+    { name: 'fingerprint cache', open: p => new LibraryAssistantFingerprintCache(p), hasWal: false }
+  ];
+  for (const scenario of cases) {
+    await t.test(scenario.name, async subtest => {
+      await withDatabase(async databasePath => {
+        const statements: string[] = [];
+        const nativeExec = DatabaseSync.prototype.exec;
+        subtest.mock.method(DatabaseSync.prototype, 'exec', function (this: DatabaseSync, sql: string) {
+          statements.push(sql);
+          return nativeExec.call(this, sql);
+        });
+        try {
+          const owner = scenario.open(databasePath);
+          try {
+            assert.ok(
+              statements.includes(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`),
+              scenario.name + ' must use the central SQLite timeout'
+            );
+            assert.ok(statements.includes('PRAGMA foreign_keys = ON;'));
+            if (scenario.hasWal) assert.ok(statements.includes('PRAGMA journal_mode = WAL;'));
+          } finally {
+            owner.close();
+          }
+        } finally {
+          subtest.mock.restoreAll();
+        }
+      });
+    });
+  }
+});
+
+test('assistant queue claim explicitly expires on locked writer and recovers without partial claim', async () => {
+  await withDatabase(async databasePath => {
+    const queue = new LibraryAssistantPersistentQueue(databasePath);
+    const writer = new DatabaseSync(databasePath);
+    try {
+      writer.exec('BEGIN IMMEDIATE;');
+      const started = Date.now();
+      assert.throws(
+        () => queue.claimNext('missing-run', Date.now(), '2026-10-23T12:00:00.000Z'),
+        (error: unknown) => error instanceof Error && /SQLITE_BUSY|database is locked/i.test(error.message)
+      );
+      assert.ok(
+        Date.now() - started >= SQLITE_BUSY_TIMEOUT_MS - 1_000,
+        'the claim must fail after the canonical bounded SQLite timeout'
+      );
+      writer.exec('ROLLBACK;');
+      assert.equal(queue.claimNext('missing-run', Date.now(), '2026-10-23T12:01:00.000Z'), null);
+      const db = new DatabaseSync(databasePath, { readOnly: true });
+      try {
+        const row = db.prepare('SELECT COUNT(*) AS total FROM library_assistant_work_items').get() as { total: number };
+        assert.equal(row.total, 0);
+      } finally {
+        db.close();
+      }
+    } finally {
+      try { writer.exec('ROLLBACK;'); } catch { /* Transaction already ended. */ }
+      writer.close();
+      queue.close();
     }
   });
 });
