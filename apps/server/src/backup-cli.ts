@@ -39,8 +39,11 @@ function homeMusicServiceState(): 'active' | 'inactive' | 'unknown' {
     // On hosts without systemctl, the operator still provides explicit confirmation.
     return (result.error as NodeJS.ErrnoException).code === 'ENOENT' ? 'inactive' : 'unknown';
   }
-  if (result.status === null) return 'unknown';
-  return result.status === 0 ? 'active' : 'inactive';
+  // is-active uses 0 for active and 3 for explicitly inactive/failed units.
+  // Other exit codes may indicate missing units or service-manager errors.
+  if (result.status === 0) return 'active';
+  if (result.status === 3) return 'inactive';
+  return 'unknown';
 }
 
 async function restoreOfflineBlocker(databasePath: string) {
