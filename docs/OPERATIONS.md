@@ -86,7 +86,10 @@ comando, pare `home-music.service` e quaisquer processos de desenvolvimento
 (`npm run dev`/`npm start`) que possam estar com o banco aberto. O parâmetro
 `--confirm-service-stopped` é uma confirmação operacional, **não** prova de
 que o processo foi encerrado. O CLI verifica o estado de `home-music.service`
-quando `systemctl` está disponível e bloqueia o restore se estiver ativo.
+quando `systemctl` está disponível: bloqueia o restore se o serviço estiver
+ativo **ou** se a consulta falhar por erro de execução ou ultrapassar o limite
+de 2 segundos. Um status explícito de serviço inativo permite prosseguir; a
+ausência do comando `systemctl` mantém a confirmação manual obrigatória.
 
 A detecção adicional de descritores SQLite (`db`, `-wal`, `-shm`) usa
 `/proc` **somente no Linux**. Se a enumeração principal de `/proc` falhar,
