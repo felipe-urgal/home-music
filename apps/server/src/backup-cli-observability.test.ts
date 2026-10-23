@@ -185,12 +185,13 @@ test('restore blocks when systemctl fails or hangs, but accepts an explicitly in
     const binDir = path.join(root, 'bin');
     await mkdir(binDir);
     const commandPath = path.join(binDir, 'systemctl');
-    const env = { PATH: binDir + path.delimiter + (process.env.PATH ?? '') };
+    // Isolate PATH so execvp cannot fall through to the runner's real systemctl.
+    const env = { PATH: binDir };
     const restoreArgs = ['restore', '--artifact', artifactPath, '--confirm-service-stopped'];
 
     for (const scenario of [
       { label: 'not executable', script: '#!/bin/sh\nexit 3\n', mode: 0o644 },
-      { label: 'unresponsive', script: '#!/bin/sh\nsleep 10\n', mode: 0o755 }
+      { label: 'unresponsive', script: '#!/bin/sh\n/bin/sleep 10\n', mode: 0o755 }
     ]) {
       await writeFile(commandPath, scenario.script);
       await chmod(commandPath, scenario.mode);
