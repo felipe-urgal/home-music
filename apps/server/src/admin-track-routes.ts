@@ -10,7 +10,7 @@ import type {
   TrackMetadataOverridePatch
 } from '@home-music/shared';
 import { registerAdminLibraryNormalizationRoutes } from './admin-library-normalization-routes.js';
-import { closeAll } from './close-resources.js';
+import { closeAllSync } from './close-resources.js';
 import {
   AdminTrackMutationError,
   AdminTrackMutationService
@@ -129,9 +129,20 @@ export function registerAdminTrackRoutes(
 ) {
   const databasePath = options.databasePath || process.env.HOME_MUSIC_DATABASE_PATH || defaultDatabasePath;
   const musicDir = options.musicDir ?? process.env.MUSIC_DIR ?? '';
-  const metadataOverrides = new TrackMetadataOverrideStore(databasePath);
-  const metadataNormalization = new LibraryMetadataNormalizationStore(databasePath);
-  const coverOverrides = new TrackCoverOverrideStore(databasePath);
+  // Install the owner before opening SQLite: partial route registration must
+  // release every store, including when construction fails halfway through.
+  const ownedStores: Array<{ close(): void }> = [];
+  const own = <T extends { close(): void }>(store: T): T => {
+    ownedStores.push(store);
+    return store;
+  };
+  const closeOwned = () => closeAllSync(ownedStores.splice(0).reverse().map(store => () => store.close()));
+  app.addHook('onClose', async () => { closeOwned(); });
+
+  try {
+  const metadataOverrides = own(new TrackMetadataOverrideStore(databasePath));
+  const metadataNormalization = own(new LibraryMetadataNormalizationStore(databasePath));
+  const coverOverrides = own(new TrackCoverOverrideStore(databasePath));
   let metadataRevision = 0;
   let normalizationRevision = 0;
   let coverRevision = 0;
@@ -196,7 +207,7 @@ export function registerAdminTrackRoutes(
     }
   }
 
-  const mutations = new AdminTrackMutationService({
+  const mutations = own(new AdminTrackMutationService({
     databasePath,
     musicDir,
     tracks: service,
@@ -206,12 +217,12 @@ export function registerAdminTrackRoutes(
       if (enabled) publicTrackIds.add(trackId); else publicTrackIds.delete(trackId);
     },
     onFileMoved: () => { fileRevision += 1; }
-  });
-  const duplicateReview = new LibraryDuplicateReviewStore({
+  }));
+  const duplicateReview = own(new LibraryDuplicateReviewStore({
     databasePath,
     musicDir,
     isHidden: trackId => mutations.hasHidden(trackId)
-  });
+  }));
 
   for (const contentType of COVER_OVERRIDE_CONTENT_TYPES) {
     if (app.hasContentTypeParser(contentType)) continue;
@@ -221,16 +232,6 @@ export function registerAdminTrackRoutes(
       (_request, body, done) => { done(null, body); }
     );
   }
-
-  app.addHook('onClose', async () => {
-    await closeAll([
-      () => coverOverrides.close(),
-      () => metadataNormalization.close(),
-      () => metadataOverrides.close(),
-      () => duplicateReview.close(),
-      () => mutations.close()
-    ]);
-  });
 
   app.addHook('onRequest', async (request, reply) => {
     if (request.method !== 'PUT' || !adminCoverTrackId(request.url)) return;
@@ -561,4 +562,12 @@ export function registerAdminTrackRoutes(
   );
 
   return Object.assign(libraryProjection, { applyImportedReview });
+  } catch (error) {
+    try {
+      closeOwned();
+    } catch {
+      // Preserve the startup error; all owned resources were attempted.
+    }
+    throw error;
+  }
 }
