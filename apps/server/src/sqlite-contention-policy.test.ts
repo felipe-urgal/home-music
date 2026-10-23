@@ -12,6 +12,9 @@ import { ImportDuplicateDetectionManager } from './import-duplicate-detection.js
 import { resolveLegacyAuthBinding } from './legacy-auth-binding.js';
 import { LibraryAssistantAutonomyStore } from './library-assistant-autonomy.js';
 import { LibraryAssistantReviewPolicyStore } from './library-assistant-review-policy.js';
+import { LibraryMetadataNormalizationStore } from './library-metadata-normalization.js';
+import { TrackCoverOverrideStore } from './track-cover-overrides.js';
+import { TrackMetadataOverrideStore } from './track-metadata-overrides.js';
 import { OpenSubsonicCredentialStore } from './open-subsonic-credentials.js';
 import { TrackLyricsOverrideStore } from './track-lyrics-overrides.js';
 import { verifyPublicAccessAdmin } from './public-access-auth.js';
@@ -217,6 +220,75 @@ test('assistant review policy write times out on a locked SQLite writer and succ
       );
       writer.exec('ROLLBACK;');
       assert.deepEqual(store.set(DEFAULT_LIBRARY_ASSISTANT_REVIEW_POLICY), DEFAULT_LIBRARY_ASSISTANT_REVIEW_POLICY);
+    } finally {
+      try { writer.exec('ROLLBACK;'); } catch { /* Transaction may be closed. */ }
+      writer.close();
+      store.close();
+    }
+  });
+});
+
+
+test('admin track metadata, normalization and cover stores use the canonical SQLite timeout', async t => {
+  const scenarios: Array<{ name: string; open: (databasePath: string) => { close(): void } }> = [
+    { name: 'metadata overrides', open: p => new TrackMetadataOverrideStore(p) },
+    { name: 'metadata normalization', open: p => new LibraryMetadataNormalizationStore(p) },
+    { name: 'cover overrides', open: p => new TrackCoverOverrideStore(p) }
+  ];
+  for (const scenario of scenarios) {
+    await t.test(scenario.name, async subtest => {
+      await withDatabase(async databasePath => {
+        const seen: string[] = [];
+        const nativeExec = DatabaseSync.prototype.exec;
+        subtest.mock.method(DatabaseSync.prototype, 'exec', function (this: DatabaseSync, sql: string) {
+          seen.push(sql);
+          return nativeExec.call(this, sql);
+        });
+        try {
+          const store = scenario.open(databasePath);
+          try {
+            assert.ok(
+              seen.includes(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`),
+              scenario.name + ' must follow the shared SQLite contention policy'
+            );
+            assert.ok(seen.includes('PRAGMA foreign_keys = ON;'));
+          } finally {
+            store.close();
+          }
+        } finally {
+          subtest.mock.restoreAll();
+        }
+      });
+    });
+  }
+});
+
+test('admin metadata write contention fails with SQLITE_BUSY and resumes after lock release', async () => {
+  await withDatabase(async databasePath => {
+    const store = new TrackMetadataOverrideStore(databasePath);
+    const writer = new DatabaseSync(databasePath);
+    try {
+      writer.exec('BEGIN IMMEDIATE;');
+      const start = Date.now();
+      assert.throws(
+        () => store.patch('track-not-found', { title: 'Não escrever' }),
+        (error: unknown) => error instanceof Error && /SQLITE_BUSY|database is locked/i.test(error.message)
+      );
+      assert.ok(
+        Date.now() - start >= SQLITE_BUSY_TIMEOUT_MS - 1_000,
+        'metadata writes must wait the configured bounded timeout before failing'
+      );
+      writer.exec('ROLLBACK;');
+      assert.equal(store.patch('track-not-found', { title: 'Não escrever' }), null);
+      const verify = new DatabaseSync(databasePath, { readOnly: true });
+      try {
+        assert.equal(
+          (verify.prepare('SELECT count(*) AS total FROM track_metadata_overrides').get() as { total: number }).total,
+          0
+        );
+      } finally {
+        verify.close();
+      }
     } finally {
       try { writer.exec('ROLLBACK;'); } catch { /* Transaction may be closed. */ }
       writer.close();

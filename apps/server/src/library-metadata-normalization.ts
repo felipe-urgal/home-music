@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { SQLITE_BUSY_TIMEOUT_MS } from './sqlite-settings.js';
 import type {
   AdminLibraryNormalizationAssociateRequest,
   AdminLibraryNormalizationReviewResponse,
@@ -296,7 +297,7 @@ export class LibraryMetadataNormalizationStore {
     this.db = new DatabaseSync(databasePath);
     try {
       this.db.exec('PRAGMA foreign_keys = ON;');
-      this.db.exec('PRAGMA busy_timeout = 5000;');
+      this.db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS library_metadata_aliases (
           id TEXT PRIMARY KEY,
