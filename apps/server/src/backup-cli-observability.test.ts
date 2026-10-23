@@ -221,7 +221,7 @@ test('restore blocks when systemctl fails or hangs, but accepts an explicitly in
     await rm(commandPath);
     const missing = runCli(databasePath, restoreArgs, env);
     assert.equal(missing.status, 0, missing.stderr);
-    assert.match(missing.stderr, /Backup operation: operation=restore status=success schemaVersion=1 durationMs=\\d+/);
+    assert.match(missing.stderr, /Backup operation: operation=restore status=success schemaVersion=1 durationMs=\d+/);
     const afterMissing = new DatabaseSync(databasePath);
     try {
       assert.equal(
