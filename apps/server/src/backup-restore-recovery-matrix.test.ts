@@ -220,6 +220,11 @@ test('rollback after replacement removes stale WAL/SHM and restores the previous
       assert.ok(!sidecar?.includes(Buffer.from('stale-')), suffix + ' preservou bytes obsoletos');
     }
     assert.equal(valueOf(databasePath), 'current-before-restore');
+    assert.deepEqual(
+      (await readdir(path.dirname(databasePath))).filter(name => /^\.home-music-(restore|rollback)-/.test(name)),
+      [],
+      'successful rollback must clean temporary snapshots and WAL/SHM sidecars'
+    );
     await verifyBackupArtifact(artifact.artifactPath);
   });
 });
@@ -291,9 +296,9 @@ test('restore of a valid old-schema artifact can advance to current schema at ne
 
     await restoreBackupArtifact(artifact.artifactPath, databasePath);
     assert.deepEqual(
-      (await readdir(path.dirname(databasePath))).filter(name => /^\.home-music-restore-/.test(name)),
+      (await readdir(path.dirname(databasePath))).filter(name => /^\.home-music-(restore|rollback)-/.test(name)),
       [],
-      'staging database and WAL/SHM sidecars must be removed after successful restore'
+      'staging and rollback database/WAL/SHM sidecars must be removed after successful restore'
     );
     const restored = new HomeMusicDatabase(databasePath);
     try {
