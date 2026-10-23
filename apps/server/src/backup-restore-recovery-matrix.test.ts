@@ -586,7 +586,7 @@ test('restore refuses staged SQLite byte changes after the offline guard without
         restoreBackupArtifact(artifact.artifactPath, databasePath, {
           beforeReplace: async () => {
             const names = (await readdir(path.dirname(databasePath)))
-              .filter(name => /^\\.home-music-restore-.*\\.db$/.test(name));
+              .filter(name => /^\.home-music-restore-.*\.db$/.test(name));
             assert.equal(names.length, 1, 'one staged SQLite file must exist before replacement');
             const staged = path.join(path.dirname(databasePath), names[0]);
             const original = await readFile(staged);
@@ -610,7 +610,7 @@ test('restore refuses staged SQLite byte changes after the offline guard without
       );
       assert.equal(valueOf(databasePath), 'must-remain-live', tamperMode);
       assert.deepEqual(
-        (await readdir(path.dirname(databasePath))).filter(name => /^\\.home-music-(restore|rollback)-/.test(name)),
+        (await readdir(path.dirname(databasePath))).filter(name => /^\.home-music-(restore|rollback)-/.test(name)),
         [],
         'failed restore must clean all staging and rollback snapshots'
       );
