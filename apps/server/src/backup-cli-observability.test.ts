@@ -191,7 +191,10 @@ test('restore blocks when systemctl fails or hangs, but accepts an explicitly in
 
     for (const scenario of [
       { label: 'not executable', script: '#!/bin/sh\nexit 3\n', mode: 0o644 },
-      { label: 'unresponsive', script: '#!/bin/sh\n/bin/sleep 10\n', mode: 0o755 }
+      { label: 'unresponsive', script: '#!/bin/sh\n/bin/sleep 10\n', mode: 0o755 },
+      { label: 'generic service error', script: '#!/bin/sh\nexit 1\n', mode: 0o755 },
+      { label: 'service state unavailable', script: '#!/bin/sh\nexit 4\n', mode: 0o755 },
+      { label: 'unexpected exit status', script: '#!/bin/sh\nexit 42\n', mode: 0o755 }
     ]) {
       await writeFile(commandPath, scenario.script);
       await chmod(commandPath, scenario.mode);
@@ -213,8 +216,24 @@ test('restore blocks when systemctl fails or hangs, but accepts an explicitly in
       }
     }
 
-    // An explicit inactive status (systemctl exit 3) retains the existing
-    // operator-confirmed restore behavior, avoiding a false dependency on systemd.
+    // A host without systemctl continues to rely on the operator's explicit
+    // confirmation, rather than requiring systemd just to use the CLI.
+    await rm(commandPath);
+    const missing = runCli(databasePath, restoreArgs, env);
+    assert.equal(missing.status, 0, missing.stderr);
+    assert.match(missing.stderr, /Backup operation: operation=restore status=success schemaVersion=1 durationMs=\\d+/);
+    const afterMissing = new DatabaseSync(databasePath);
+    try {
+      assert.equal(
+        (afterMissing.prepare('SELECT value FROM state').get() as { value: string }).value,
+        'backup'
+      );
+      afterMissing.prepare('UPDATE state SET value = ?').run('live-after-missing-systemctl');
+    } finally {
+      afterMissing.close();
+    }
+
+    // Only the explicit inactive status (systemctl exit 3) permits a restore.
     await writeFile(commandPath, '#!/bin/sh\nexit 3\n');
     await chmod(commandPath, 0o755);
     const inactive = runCli(databasePath, restoreArgs, env);
