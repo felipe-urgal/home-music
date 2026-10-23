@@ -72,8 +72,11 @@ Os comandos `backup:create`, `backup:verify` e `backup:restore` registram, ao
 terminar, `operation`, `status` (`success`, `blocked` ou `failed`),
 `schemaVersion` (ou `unknown`) e `durationMs` em stderr. Essas métricas
 não incluem caminho do banco, credenciais, hashes nem conteúdo do manifesto;
-não substituem logs de erro ou a validação do artefato. Um restore bloqueado
-não deve ser tratado como sucesso, mesmo que a verificação inicial tenha passado.
+não substituem logs de erro ou a validação do artefato. Na criação e verificação
+do backup, o SQLite deve passar `integrity_check` **e** `foreign_key_check`;
+um snapshot com relações órfãs é rejeitado mesmo que SHA-256 e estrutura
+física estejam íntegros. Um restore bloqueado não deve ser tratado como
+sucesso, mesmo que a verificação inicial tenha passado.
 
 O SQLite principal usa WAL e `synchronous=NORMAL`: essa combinação prioriza
 throughput sem dispensar backups verificados e um procedimento de restore
