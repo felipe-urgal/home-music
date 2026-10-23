@@ -94,7 +94,6 @@ test('create rejeita diretório de saída apontado por symlink', async t => {
   }
 });
 
-
 test('metadata I/O errors are not mistaken for missing backup files', async t => {
   if (process.platform === 'win32') {
     t.skip('ENOTDIR differs across Windows filesystems');
@@ -149,7 +148,8 @@ test('restore aborts before staging when database metadata cannot be read', asyn
     );
     const original = new DatabaseSync(liveDatabasePath, { readOnly: true });
     try {
-      assert.deepEqual(original.prepare('SELECT value FROM state').all(), [{ value: 'ok' }]);
+      const row = original.prepare('SELECT value FROM state').get() as { value: string };
+      assert.equal(row.value, 'ok');
     } finally {
       original.close();
     }
