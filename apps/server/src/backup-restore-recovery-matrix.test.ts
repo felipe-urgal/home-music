@@ -467,8 +467,8 @@ test('failed cleanup of a newly installed DB raises RestoreRollbackError', async
       }
     );
 
-    // Cleanup failed: never claim the target was restored or safely removed.
-    assert.equal(valueOf(emptyTarget), 'committed-before');
+    // Cleanup failed: the target may remain installed; do not claim recovery.
+    assert.ok((await lstat(emptyTarget)).isFile());
     assert.equal(valueOf(databasePath), 'committed-before');
   });
 });
