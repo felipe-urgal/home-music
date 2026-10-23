@@ -12,6 +12,9 @@ import { ImportDuplicateDetectionManager } from './import-duplicate-detection.js
 import { resolveLegacyAuthBinding } from './legacy-auth-binding.js';
 import { LibraryAssistantAutonomyStore } from './library-assistant-autonomy.js';
 import { LibraryAssistantReviewPolicyStore } from './library-assistant-review-policy.js';
+import { AccountPasswordService } from './account-password.js';
+import { AdminUsersService } from './admin-users.js';
+import { AdminOperationHistoryStore } from './admin-operation-history.js';
 import { LibraryDuplicateReviewStore } from './library-duplicate-review.js';
 import { MediaFileMoveStore } from './media-file-move.js';
 import { MediaQuarantineStore } from './media-quarantine.js';
@@ -365,6 +368,74 @@ test('duplicate-review write fails after bounded SQLite contention and recovers 
     } finally {
       try { lock.exec('ROLLBACK;'); } catch { /* The transaction may already have ended. */ }
       lock.close();
+      store.close();
+    }
+  });
+});
+
+
+test('password, admin user and operation history connections use the canonical SQLite timeout', async t => {
+  const sessions = { revokeUserSessions: (_userId: string) => 0 };
+  const scenarios: Array<{ name: string; open: (databasePath: string) => { close(): void }; foreignKeys: boolean }> = [
+    { name: 'account passwords', open: db => new AccountPasswordService(db, sessions), foreignKeys: false },
+    { name: 'admin users', open: db => new AdminUsersService(db, sessions), foreignKeys: true },
+    { name: 'admin operation history', open: db => new AdminOperationHistoryStore(db), foreignKeys: false }
+  ];
+  for (const scenario of scenarios) {
+    await t.test(scenario.name, async subtest => {
+      await withDatabase(async databasePath => {
+        const statements: string[] = [];
+        const nativeExec = DatabaseSync.prototype.exec;
+        subtest.mock.method(DatabaseSync.prototype, 'exec', function (this: DatabaseSync, sql: string) {
+          statements.push(sql);
+          return nativeExec.call(this, sql);
+        });
+        try {
+          const store = scenario.open(databasePath);
+          try {
+            assert.ok(
+              statements.includes(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`),
+              scenario.name + ' must use the shared bounded SQLite timeout'
+            );
+            if (scenario.foreignKeys) assert.ok(statements.includes('PRAGMA foreign_keys = ON;'));
+            if (scenario.name === 'admin operation history') {
+              assert.ok(statements.includes('PRAGMA journal_mode = WAL;'));
+            }
+          } finally {
+            store.close();
+          }
+        } finally {
+          subtest.mock.restoreAll();
+        }
+      });
+    });
+  }
+});
+
+test('admin operation history write times out on a held SQLite lock without recording a partial scan', async () => {
+  await withDatabase(async databasePath => {
+    const store = new AdminOperationHistoryStore(databasePath);
+    const writer = new DatabaseSync(databasePath);
+    try {
+      writer.exec('BEGIN IMMEDIATE;');
+      const started = Date.now();
+      assert.throws(
+        () => store.startScan('manual'),
+        (error: unknown) => error instanceof Error && /SQLITE_BUSY|database is locked/i.test(error.message)
+      );
+      assert.ok(
+        Date.now() - started >= SQLITE_BUSY_TIMEOUT_MS - 1_000,
+        'history writes must expire after the shared bounded timeout'
+      );
+      writer.exec('ROLLBACK;');
+      const id = store.startScan('manual');
+      const rows = store.list({ kind: 'scan' });
+      assert.equal(rows.length, 1);
+      assert.equal(rows[0].id, id);
+      assert.equal(rows[0].status, 'running');
+    } finally {
+      try { writer.exec('ROLLBACK;'); } catch { /* Transaction already finished. */ }
+      writer.close();
       store.close();
     }
   });
