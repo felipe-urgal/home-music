@@ -290,6 +290,11 @@ test('restore of a valid old-schema artifact can advance to current schema at ne
     }
 
     await restoreBackupArtifact(artifact.artifactPath, databasePath);
+    assert.deepEqual(
+      (await readdir(path.dirname(databasePath))).filter(name => /^\.home-music-restore-/.test(name)),
+      [],
+      'staging database and WAL/SHM sidecars must be removed after successful restore'
+    );
     const restored = new HomeMusicDatabase(databasePath);
     try {
       assert.equal(restored.getSchemaVersion(), CURRENT_SCHEMA_VERSION);
@@ -440,6 +445,10 @@ test('failed restore into an empty target removes the newly installed DB and sid
     // A later retry can still install the verified artifact successfully.
     await restoreBackupArtifact(artifact.artifactPath, emptyTarget);
     assert.equal(valueOf(emptyTarget), 'committed-before');
+    assert.deepEqual(
+      (await readdir(path.dirname(databasePath))).filter(name => /^\.home-music-restore-/.test(name)),
+      []
+    );
   });
 });
 
