@@ -13,6 +13,7 @@ import { resolveLegacyAuthBinding } from './legacy-auth-binding.js';
 import { LibraryAssistantAutonomyStore } from './library-assistant-autonomy.js';
 import { LibraryAssistantReviewPolicyStore } from './library-assistant-review-policy.js';
 import { LibraryAssistantPersistentQueue } from './library-assistant-persistent-queue.js';
+import { LibraryAssistantStore } from './library-assistant-store.js';
 import { LibraryAssistantFingerprintCache } from './library-assistant-fingerprint-cache.js';
 import { LibraryAssistantIncrementalIndex } from './library-assistant-incremental-index.js';
 import { AccountPasswordService } from './account-password.js';
@@ -387,6 +388,10 @@ test('password, admin user and operation history connections use the canonical S
   for (const scenario of scenarios) {
     await t.test(scenario.name, async subtest => {
       await withDatabase(async databasePath => {
+        if (scenario.name === 'persistent work queue') {
+          const assistant = new LibraryAssistantStore(databasePath);
+          assistant.close();
+        }
         const statements: string[] = [];
         const nativeExec = DatabaseSync.prototype.exec;
         subtest.mock.method(DatabaseSync.prototype, 'exec', function (this: DatabaseSync, sql: string) {
@@ -482,6 +487,8 @@ test('assistant queue, incremental index and fingerprint cache use shared bounde
 
 test('assistant queue claim explicitly expires on locked writer and recovers without partial claim', async () => {
   await withDatabase(async databasePath => {
+    const assistant = new LibraryAssistantStore(databasePath);
+    assistant.close();
     const queue = new LibraryAssistantPersistentQueue(databasePath);
     const writer = new DatabaseSync(databasePath);
     try {
