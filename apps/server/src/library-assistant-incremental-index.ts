@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
+import { SQLITE_BUSY_TIMEOUT_MS } from './sqlite-settings.js';
 import type { LibraryAssistantCapability } from '@home-music/shared/library-assistant';
 
 const MAX_IDENTIFIER_LENGTH = 192;
@@ -44,7 +45,7 @@ export class LibraryAssistantIncrementalIndex {
     this.db = new DatabaseSync(databasePath);
     try {
       this.db.exec('PRAGMA foreign_keys = ON;');
-      this.db.exec('PRAGMA busy_timeout = 5000;');
+      this.db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
       this.db.exec('PRAGMA journal_mode = WAL;');
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS library_assistant_analysis_state (
