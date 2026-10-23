@@ -220,6 +220,11 @@ test('rollback after replacement removes stale WAL/SHM and restores the previous
       assert.ok(!sidecar?.includes(Buffer.from('stale-')), suffix + ' preservou bytes obsoletos');
     }
     assert.equal(valueOf(databasePath), 'current-before-restore');
+    assert.deepEqual(
+      (await readdir(path.dirname(databasePath))).filter(name => /^\.home-music-(restore|rollback)-/.test(name)),
+      [],
+      'successful rollback must clean temporary snapshots and WAL/SHM sidecars'
+    );
     await verifyBackupArtifact(artifact.artifactPath);
   });
 });
@@ -291,9 +296,9 @@ test('restore of a valid old-schema artifact can advance to current schema at ne
 
     await restoreBackupArtifact(artifact.artifactPath, databasePath);
     assert.deepEqual(
-      (await readdir(path.dirname(databasePath))).filter(name => /^\.home-music-restore-/.test(name)),
+      (await readdir(path.dirname(databasePath))).filter(name => /^\.home-music-(restore|rollback)-/.test(name)),
       [],
-      'staging database and WAL/SHM sidecars must be removed after successful restore'
+      'staging and rollback database/WAL/SHM sidecars must be removed after successful restore'
     );
     const restored = new HomeMusicDatabase(databasePath);
     try {
@@ -566,6 +571,59 @@ test('backup creation rejects source with orphaned foreign keys and removes part
       (error: unknown) => error instanceof BackupValidationError && /foreign_key_check/.test(error.message)
     );
     assert.deepEqual(await readdir(outputRoot), []);
+    assert.equal(valueOf(databasePath), 'committed-before');
+  });
+});
+
+test('restore refuses staged SQLite byte changes after the offline guard without touching live data', async () => {
+  await inTemporaryDatabase(async (databasePath, outputRoot) => {
+    seedDatabase(databasePath);
+    const artifact = await createBackupArtifact({ databasePath, outputRoot });
+    const live = new DatabaseSync(databasePath);
+    try {
+      live.prepare('UPDATE state SET value = ?').run('must-remain-live');
+    } finally {
+      live.close();
+    }
+
+    for (const tamperMode of ['same-size', 'extra-byte'] as const) {
+      await assert.rejects(
+        restoreBackupArtifact(artifact.artifactPath, databasePath, {
+          beforeReplace: async () => {
+            const names = (await readdir(path.dirname(databasePath)))
+              .filter(name => /^\.home-music-restore-.*\.db$/.test(name));
+            assert.equal(names.length, 1, 'one staged SQLite file must exist before replacement');
+            const staged = path.join(path.dirname(databasePath), names[0]);
+            const original = await readFile(staged);
+            if (tamperMode === 'same-size') {
+              const changed = Buffer.from(original);
+              const valueOffset = changed.indexOf('committed-before');
+              assert.ok(valueOffset >= 0, 'fixture content must be present in the SQLite snapshot');
+              changed[valueOffset] = 'C'.charCodeAt(0);
+              await writeFile(staged, changed);
+              assert.equal(changed.length, original.length);
+            } else {
+              await writeFile(staged, Buffer.concat([original, Buffer.from('x')]));
+            }
+          }
+        }),
+        (error: unknown) => {
+          assert.ok(error instanceof BackupValidationError);
+          assert.equal(error.message, 'O SQLite preparado para restore diverge do backup validado.');
+          return true;
+        }
+      );
+      assert.equal(valueOf(databasePath), 'must-remain-live', tamperMode);
+      assert.deepEqual(
+        (await readdir(path.dirname(databasePath))).filter(name => /^\.home-music-(restore|rollback)-/.test(name)),
+        [],
+        'failed restore must clean all staging and rollback snapshots'
+      );
+      await verifyBackupArtifact(artifact.artifactPath);
+    }
+
+    // The original verified artifact must remain usable after both rejected attempts.
+    await restoreBackupArtifact(artifact.artifactPath, databasePath);
     assert.equal(valueOf(databasePath), 'committed-before');
   });
 });

@@ -367,6 +367,15 @@ export async function restoreBackupArtifact(
     }
 
     await options.beforeReplace?.(databasePath);
+    // The source was verified before copying and invoking the offline guard.
+    // Recheck the staged bytes immediately before any live SQLite sidecar is removed.
+    const preparedStat = await assertRegularFile(installPath, 'SQLite preparado para restore');
+    if (
+      preparedStat.size !== verified.manifest.database.bytes
+      || await sha256File(installPath) !== verified.manifest.database.sha256
+    ) {
+      throw new BackupValidationError('O SQLite preparado para restore diverge do backup validado.');
+    }
     replacementStarted = true;
     await rm(`${databasePath}-wal`, { force: true });
     await rm(`${databasePath}-shm`, { force: true });
@@ -410,9 +419,13 @@ export async function restoreBackupArtifact(
       rm(installPath, { force: true }),
       rm(`${installPath}-wal`, { force: true }),
       rm(`${installPath}-shm`, { force: true }),
-      ...(rollbackReady && !replacementStarted
-        ? [rm(rollbackPath, { force: true })]
-        : [])
+      // Keep the only recovery copy if rollback itself failed after replacement.
+      // Otherwise also remove WAL/SHM created by inspecting the rollback snapshot.
+      ...(rollbackReady && replacementStarted ? [] : [
+        rm(rollbackPath, { force: true }),
+        rm(`${rollbackPath}-wal`, { force: true }),
+        rm(`${rollbackPath}-shm`, { force: true })
+      ])
     ]);
   }
 }
