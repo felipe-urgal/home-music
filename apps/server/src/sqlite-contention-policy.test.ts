@@ -12,6 +12,9 @@ import { ImportDuplicateDetectionManager } from './import-duplicate-detection.js
 import { resolveLegacyAuthBinding } from './legacy-auth-binding.js';
 import { LibraryAssistantAutonomyStore } from './library-assistant-autonomy.js';
 import { LibraryAssistantReviewPolicyStore } from './library-assistant-review-policy.js';
+import { LibraryDuplicateReviewStore } from './library-duplicate-review.js';
+import { MediaFileMoveStore } from './media-file-move.js';
+import { MediaQuarantineStore } from './media-quarantine.js';
 import { LibraryMetadataNormalizationStore } from './library-metadata-normalization.js';
 import { TrackCoverOverrideStore } from './track-cover-overrides.js';
 import { TrackMetadataOverrideStore } from './track-metadata-overrides.js';
@@ -292,6 +295,76 @@ test('admin metadata write contention fails with SQLITE_BUSY and resumes after l
     } finally {
       try { writer.exec('ROLLBACK;'); } catch { /* Transaction may be closed. */ }
       writer.close();
+      store.close();
+    }
+  });
+});
+
+
+test('file-admin SQLite stores use the shared timeout while keeping foreign keys enabled', async t => {
+  const cases: Array<{ name: string; open: (databasePath: string) => { close(): void } }> = [
+    { name: 'duplicate review', open: p => new LibraryDuplicateReviewStore({ databasePath: p, musicDir: path.dirname(p) }) },
+    { name: 'file move', open: p => new MediaFileMoveStore(p, path.dirname(p)) },
+    { name: 'quarantine', open: p => new MediaQuarantineStore(p, path.dirname(p)) }
+  ];
+  for (const scenario of cases) {
+    await t.test(scenario.name, async subtest => {
+      await withDatabase(async databasePath => {
+        const statements: string[] = [];
+        const originalExec = DatabaseSync.prototype.exec;
+        subtest.mock.method(DatabaseSync.prototype, 'exec', function (this: DatabaseSync, sql: string) {
+          statements.push(sql);
+          return originalExec.call(this, sql);
+        });
+        try {
+          const owner = scenario.open(databasePath);
+          try {
+            assert.ok(
+              statements.includes(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`),
+              scenario.name + ': expected canonical busy timeout'
+            );
+            assert.ok(statements.includes('PRAGMA foreign_keys = ON;'));
+          } finally {
+            owner.close();
+          }
+        } finally {
+          subtest.mock.restoreAll();
+        }
+      });
+    });
+  }
+});
+
+test('duplicate-review write fails after bounded SQLite contention and recovers when lock releases', async () => {
+  await withDatabase(async databasePath => {
+    const store = new LibraryDuplicateReviewStore({
+      databasePath,
+      musicDir: path.dirname(databasePath)
+    });
+    const lock = new DatabaseSync(databasePath);
+    try {
+      lock.exec('BEGIN IMMEDIATE;');
+      const started = Date.now();
+      assert.throws(
+        () => store.setIgnored(['track-a', 'track-b'], false),
+        (error: unknown) => error instanceof Error && /SQLITE_BUSY|database is locked/i.test(error.message)
+      );
+      assert.ok(
+        Date.now() - started >= SQLITE_BUSY_TIMEOUT_MS - 1_000,
+        'duplicate-review writer must fail after the bounded timeout, without retry loops'
+      );
+      lock.exec('ROLLBACK;');
+      assert.equal(store.setIgnored(['track-a', 'track-b'], false).ignored, false);
+      const verify = new DatabaseSync(databasePath, { readOnly: true });
+      try {
+        const row = verify.prepare('SELECT COUNT(*) AS total FROM library_duplicate_ignores').get() as { total: number };
+        assert.equal(row.total, 0);
+      } finally {
+        verify.close();
+      }
+    } finally {
+      try { lock.exec('ROLLBACK;'); } catch { /* The transaction may already have ended. */ }
+      lock.close();
       store.close();
     }
   });
