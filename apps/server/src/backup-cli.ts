@@ -28,18 +28,28 @@ function usage() {
   console.error('  npm run backup:restore -- --artifact <diretorio.backup> --confirm-service-stopped');
 }
 
-function homeMusicServiceIsActive() {
+function homeMusicServiceState(): 'active' | 'inactive' | 'unknown' {
+  // An unresponsive service manager must not hang the restore or pass as stopped.
   const result = spawnSync(
     'systemctl',
     ['is-active', '--quiet', 'home-music.service'],
-    { stdio: 'ignore' }
+    { stdio: 'ignore', timeout: 2_000 }
   );
-  return !result.error && result.status === 0;
+  if (result.error) {
+    // On hosts without systemctl, the operator still provides explicit confirmation.
+    return (result.error as NodeJS.ErrnoException).code === 'ENOENT' ? 'inactive' : 'unknown';
+  }
+  if (result.status === null) return 'unknown';
+  return result.status === 0 ? 'active' : 'inactive';
 }
 
 async function restoreOfflineBlocker(databasePath: string) {
-  if (homeMusicServiceIsActive()) {
+  const serviceState = homeMusicServiceState();
+  if (serviceState === 'active') {
     return 'home-music.service ainda está ativo. Execute sudo systemctl stop home-music antes do restore.';
+  }
+  if (serviceState === 'unknown') {
+    return 'Não foi possível verificar o estado de home-music.service. Confira o systemctl e confirme que o serviço está parado antes do restore.';
   }
   try {
     if (await databaseIsOpenByAnotherProcess(databasePath)) {
