@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { SQLITE_BUSY_TIMEOUT_MS } from './sqlite-settings.js';
 import { MAX_TRACK_COVER_BYTES, type AdminTrackCoverResponse, type Track } from '@home-music/shared';
 
 export const COVER_OVERRIDE_CONTENT_TYPES = [
@@ -228,7 +229,7 @@ export class TrackCoverOverrideStore {
     this.db = new DatabaseSync(databasePath);
     try {
       this.db.exec('PRAGMA foreign_keys = ON;');
-      this.db.exec('PRAGMA busy_timeout = 5000;');
+      this.db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS track_cover_overrides (
           track_id TEXT PRIMARY KEY REFERENCES tracks(id) ON DELETE CASCADE,
