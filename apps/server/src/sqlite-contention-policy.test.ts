@@ -459,6 +459,10 @@ test('assistant queue, incremental index and fingerprint cache use shared bounde
   for (const scenario of cases) {
     await t.test(scenario.name, async subtest => {
       await withDatabase(async databasePath => {
+        if (scenario.name === 'persistent work queue') {
+          const assistant = new LibraryAssistantStore(databasePath);
+          assistant.close();
+        }
         const statements: string[] = [];
         const nativeExec = DatabaseSync.prototype.exec;
         subtest.mock.method(DatabaseSync.prototype, 'exec', function (this: DatabaseSync, sql: string) {
