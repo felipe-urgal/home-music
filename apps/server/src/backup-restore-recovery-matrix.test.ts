@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import {
-  copyFile, lstat, mkdtemp, readFile, readdir, rm, symlink, writeFile
+  copyFile, lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile
 } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -404,5 +404,71 @@ test('creating backup from a future-schema database cleans up partial output', a
       (error: unknown) => error instanceof BackupValidationError && /mais novo/.test(error.message)
     );
     assert.deepEqual(await readdir(outputRoot), []);
+  });
+});
+
+
+test('failed restore into an empty target removes the newly installed DB and sidecars', async () => {
+  await inTemporaryDatabase(async (databasePath, outputRoot) => {
+    seedDatabase(databasePath);
+    const artifact = await createBackupArtifact({ databasePath, outputRoot });
+    const emptyTarget = path.join(path.dirname(databasePath), 'empty-target.db');
+
+    await assert.rejects(
+      restoreBackupArtifact(artifact.artifactPath, emptyTarget, {
+        afterReplace: async installedPath => {
+          await writeFile(`${installedPath}-wal`, 'stale-wal');
+          await writeFile(`${installedPath}-shm`, 'stale-shm');
+          throw new Error('injected failure after initial installation');
+        }
+      }),
+      /injected failure after initial installation/
+    );
+
+    for (const filePath of [emptyTarget, `${emptyTarget}-wal`, `${emptyTarget}-shm`]) {
+      await assert.rejects(
+        lstat(filePath),
+        (error: unknown) => (error as NodeJS.ErrnoException).code === 'ENOENT'
+      );
+    }
+    const leftovers = (await readdir(path.dirname(databasePath)))
+      .filter(name => /^\.home-music-(restore|rollback)-/.test(name));
+    assert.deepEqual(leftovers, []);
+    assert.equal(valueOf(databasePath), 'committed-before');
+    await verifyBackupArtifact(artifact.artifactPath);
+
+    // A later retry can still install the verified artifact successfully.
+    await restoreBackupArtifact(artifact.artifactPath, emptyTarget);
+    assert.equal(valueOf(emptyTarget), 'committed-before');
+  });
+});
+
+test('failed cleanup of a newly installed DB raises RestoreRollbackError', async () => {
+  await inTemporaryDatabase(async (databasePath, outputRoot) => {
+    seedDatabase(databasePath);
+    const artifact = await createBackupArtifact({ databasePath, outputRoot });
+    const emptyTarget = path.join(path.dirname(databasePath), 'empty-target.db');
+
+    await assert.rejects(
+      restoreBackupArtifact(artifact.artifactPath, emptyTarget, {
+        afterReplace: async installedPath => {
+          // A non-empty directory cannot be removed by the file-only sidecar cleanup.
+          await rm(`${installedPath}-wal`, { force: true });
+          await mkdir(`${installedPath}-wal`);
+          await writeFile(path.join(`${installedPath}-wal`, 'sentinel'), 'do not discard');
+          throw new Error('injected restore failure');
+        }
+      }),
+      (error: unknown) => {
+        assert.ok(error instanceof RestoreRollbackError);
+        assert.match(String(error.restoreError), /injected restore failure/);
+        assert.ok(error.rollbackError);
+        return true;
+      }
+    );
+
+    // Cleanup failed: never claim the target was restored or safely removed.
+    assert.equal(valueOf(emptyTarget), 'committed-before');
+    assert.equal(valueOf(databasePath), 'committed-before');
   });
 });
