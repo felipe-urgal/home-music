@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
+import { SQLITE_BUSY_TIMEOUT_MS } from './sqlite-settings.js';
 
 const MAX_CACHE_ENTRIES = 2_000;
 const MAX_FINGERPRINT_CHARS = 64 * 1024;
@@ -18,7 +19,7 @@ export class LibraryAssistantFingerprintCache {
     this.db = new DatabaseSync(databasePath);
     try {
       this.db.exec('PRAGMA foreign_keys = ON;');
-      this.db.exec('PRAGMA busy_timeout = 5000;');
+      this.db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS library_assistant_fingerprint_cache (
           track_id TEXT PRIMARY KEY NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
