@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,13 +11,14 @@ const cliPath = fileURLToPath(new URL('./backup-cli.ts', import.meta.url));
 const projectRoot = fileURLToPath(new URL('../../../', import.meta.url));
 const secret = 'private-test-secret-never-log';
 
-function runCli(databasePath: string, args: string[]) {
+function runCli(databasePath: string, args: string[], extraEnv: NodeJS.ProcessEnv = {}) {
   const result = spawnSync(process.execPath, ['--import', 'tsx', cliPath, ...args], {
     cwd: projectRoot,
     env: {
       ...process.env,
       HOME_MUSIC_DATABASE_PATH: databasePath,
-      HOME_MUSIC_PASSWORD: secret
+      HOME_MUSIC_PASSWORD: secret,
+      ...extraEnv
     },
     encoding: 'utf8',
     timeout: 30_000
@@ -70,6 +71,70 @@ test('CLI reports backup metrics without exposing paths or secrets', async () =>
       assert.equal(metrics.length, 1);
       assert.doesNotMatch(metrics[0], /private-test-secret|home-music\.db|backups|sha256|SHA-256/i);
       assert.doesNotMatch(result.stderr, /private-test-secret-never-log/);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+
+test('restore refuses an active systemd service even with explicit operator confirmation', async t => {
+  if (process.platform === 'win32') {
+    t.skip('This test uses a POSIX systemctl double');
+    return;
+  }
+  const root = await mkdtemp(path.join(os.tmpdir(), 'home-music-restore-active-service-'));
+  const databasePath = path.join(root, 'home-music.db');
+  const outputRoot = path.join(root, 'backups');
+  try {
+    const db = new DatabaseSync(databasePath);
+    try {
+      db.exec("CREATE TABLE state(value TEXT NOT NULL); INSERT INTO state(value) VALUES ('backup'); PRAGMA user_version = 1;");
+    } finally {
+      db.close();
+    }
+
+    const created = runCli(databasePath, ['create', '--output', outputRoot]);
+    assert.equal(created.status, 0, created.stderr);
+    const [artifact] = await readdir(outputRoot);
+    assert.ok(artifact?.endsWith('.backup'));
+
+    const live = new DatabaseSync(databasePath);
+    try {
+      live.prepare('UPDATE state SET value = ?').run('must-survive');
+    } finally {
+      live.close();
+    }
+
+    const executableDir = path.join(root, 'commands');
+    await mkdir(executableDir);
+    const systemctlPath = path.join(executableDir, 'systemctl');
+    await writeFile(systemctlPath, [
+      '#!/bin/sh',
+      'if [ "$1" = "is-active" ] && [ "$2" = "--quiet" ] && [ "$3" = "home-music.service" ]; then',
+      '  exit 0',
+      'fi',
+      'exit 1',
+      ''
+    ].join('\n'));
+    await chmod(systemctlPath, 0o755);
+
+    const result = runCli(
+      databasePath,
+      ['restore', '--artifact', path.join(outputRoot, artifact), '--confirm-service-stopped'],
+      { PATH: executableDir + path.delimiter + (process.env.PATH ?? '') }
+    );
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stderr, /home-music\.service ainda está ativo/);
+    assert.match(result.stderr, /Backup operation: operation=restore status=blocked schemaVersion=unknown durationMs=\d+/);
+    assert.doesNotMatch(result.stderr, /home-music-restore-active-service-|private-test-secret-never-log/);
+
+    const unchanged = new DatabaseSync(databasePath, { readOnly: true });
+    try {
+      const value = unchanged.prepare('SELECT value FROM state').get() as { value: string };
+      assert.equal(value.value, 'must-survive');
+    } finally {
+      unchanged.close();
     }
   } finally {
     await rm(root, { recursive: true, force: true });
