@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
+import { SQLITE_BUSY_TIMEOUT_MS } from './sqlite-settings.js';
 import {
   MAX_GLOBAL_SESSIONS,
   MAX_SESSIONS_PER_USER,
@@ -62,7 +63,7 @@ export class PersistentSessionManager extends SessionManager {
     this.db = new DatabaseSync(databasePath);
     try {
       this.db.exec('PRAGMA foreign_keys = ON;');
-      this.db.exec('PRAGMA busy_timeout = 5000;');
+      this.db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
       this.ensureSchema();
     } catch (error) {
       try { this.db.close(); } catch { /* Preserve the initialization error. */ }

@@ -8,6 +8,7 @@ import test from 'node:test';
 import { HomeMusicDatabase } from './database.js';
 import { AccountPasswordService } from './account-password.js';
 import { hashPassword } from './password.js';
+import { SQLITE_BUSY_TIMEOUT_MS } from './sqlite-settings.js';
 import {
   PERSISTENT_SESSION_EXPIRES_AT,
   PersistentSessionManager
@@ -206,6 +207,62 @@ test('alterar senha revoga todas as sessões persistidas, inclusive atual', asyn
     passwords.close();
     manager.close();
   } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('persistent sessions use the shared timeout and fail explicitly on a held SQLite writer lock', async t => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'home-music-session-lock-timeout-'));
+  const databasePath = path.join(directory, 'home-music.db');
+  let manager: PersistentSessionManager | null = null;
+  let lock: DatabaseSync | null = null;
+
+  try {
+    const schema = new HomeMusicDatabase(databasePath);
+    schema.close();
+    insertUser(databasePath);
+
+    const nativeExec = DatabaseSync.prototype.exec;
+    const pragmas: string[] = [];
+    t.mock.method(DatabaseSync.prototype, 'exec', function (this: DatabaseSync, sql: string) {
+      if (sql.startsWith('PRAGMA busy_timeout')) pragmas.push(sql);
+      return nativeExec.call(this, sql);
+    });
+    try {
+      manager = new PersistentSessionManager(databasePath);
+    } finally {
+      t.mock.restoreAll();
+    }
+    const activeSessions = manager;
+    assert.ok(activeSessions);
+    assert.ok(
+      pragmas.includes(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`),
+      'the session connection must use the shared SQLite timeout, not a hard-coded value'
+    );
+
+    lock = new DatabaseSync(databasePath);
+    lock.exec('BEGIN IMMEDIATE;');
+    lock.exec("UPDATE users SET updated_at = 'locked' WHERE id = 'user-1';");
+    const started = Date.now();
+    assert.throws(
+      () => activeSessions.createSessionForUser('user-1', 1_000),
+      (error: unknown) => error instanceof Error && /SQLITE_BUSY|database is locked/i.test(error.message)
+    );
+    assert.ok(
+      Date.now() - started >= SQLITE_BUSY_TIMEOUT_MS - 1_000,
+      'the session writer should wait for the configured bounded timeout and then fail'
+    );
+    lock.exec('ROLLBACK;');
+
+    const token = activeSessions.createSessionForUser('user-1', 2_000);
+    assert.equal(activeSessions.validateSession(token), true);
+    assert.equal(activeSessions.listUserSessions('user-1', token)?.length, 1);
+  } finally {
+    if (lock) {
+      try { lock.exec('ROLLBACK;'); } catch { /* Transaction already finished. */ }
+      lock.close();
+    }
+    manager?.close();
     await rm(directory, { recursive: true, force: true });
   }
 });
