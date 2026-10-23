@@ -397,7 +397,15 @@ export async function restoreBackupArtifact(
     }
     throw restoreError;
   } finally {
-    await rm(installPath, { force: true });
-    if (rollbackReady && !replacementStarted) await rm(rollbackPath, { force: true });
+    // SQLite inspection of the staging file can create WAL/SHM sidecars; rename
+    // moves only the DB file, so remove all staging paths after closing SQLite.
+    await Promise.all([
+      rm(installPath, { force: true }),
+      rm(`${installPath}-wal`, { force: true }),
+      rm(`${installPath}-shm`, { force: true }),
+      ...(rollbackReady && !replacementStarted
+        ? [rm(rollbackPath, { force: true })]
+        : [])
+    ]);
   }
 }
