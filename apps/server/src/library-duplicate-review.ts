@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { SQLITE_BUSY_TIMEOUT_MS } from './sqlite-settings.js';
 import type {
   AdminLibraryDuplicateCandidate,
   AdminLibraryDuplicateConfidence,
@@ -180,7 +181,7 @@ export class LibraryDuplicateReviewStore {
     this.db = new DatabaseSync(options.databasePath);
     try {
       this.db.exec('PRAGMA foreign_keys = ON;');
-      this.db.exec('PRAGMA busy_timeout = 5000;');
+      this.db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS library_duplicate_ignores (
           track_a_id TEXT NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
