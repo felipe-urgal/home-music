@@ -481,3 +481,91 @@ test('failed cleanup of a newly installed DB raises RestoreRollbackError', async
     assert.equal(valueOf(databasePath), 'committed-before');
   });
 });
+
+
+test('backup rejects broken foreign keys even when SQLite integrity and manifest digest are valid', async () => {
+  await inTemporaryDatabase(async (databasePath, outputRoot) => {
+    seedDatabase(databasePath);
+    const source = new DatabaseSync(databasePath);
+    try {
+      source.exec(`
+        CREATE TABLE fk_parent (id INTEGER PRIMARY KEY);
+        CREATE TABLE fk_child (id INTEGER PRIMARY KEY, parent_id INTEGER REFERENCES fk_parent(id));
+        INSERT INTO fk_parent(id) VALUES (1);
+        INSERT INTO fk_child(id, parent_id) VALUES (1, 1);
+      `);
+    } finally {
+      source.close();
+    }
+
+    const artifact = await createBackupArtifact({ databasePath, outputRoot });
+    await verifyBackupArtifact(artifact.artifactPath);
+    const snapshotPath = path.join(artifact.artifactPath, BACKUP_DATABASE_FILE);
+    const manifestPath = path.join(artifact.artifactPath, BACKUP_MANIFEST_FILE);
+    const snapshotDb = new DatabaseSync(snapshotPath);
+    try {
+      // Deliberately introduce a logical violation without corrupting SQLite pages.
+      snapshotDb.exec('PRAGMA foreign_keys = OFF; INSERT INTO fk_child(id, parent_id) VALUES (2, 999);');
+      const integrity = snapshotDb.prepare('PRAGMA integrity_check;').get() as { integrity_check: string };
+      assert.equal(integrity.integrity_check, 'ok');
+      assert.notEqual(snapshotDb.prepare('PRAGMA foreign_key_check;').get(), undefined);
+    } finally {
+      snapshotDb.close();
+    }
+
+    // Keep hash and bytes consistent so only the relational integrity gate can reject it.
+    const bytes = await readFile(snapshotPath);
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as {
+      database: { bytes: number; sha256: string };
+    };
+    manifest.database.bytes = bytes.length;
+    manifest.database.sha256 = createHash('sha256').update(bytes).digest('hex');
+    await writeFile(manifestPath, JSON.stringify(manifest));
+
+    const live = new DatabaseSync(databasePath);
+    try {
+      live.prepare('UPDATE state SET value = ?').run('must-stay-live');
+    } finally {
+      live.close();
+    }
+
+    const isRejected = (error: unknown) => {
+      assert.ok(error instanceof BackupValidationError);
+      assert.match(error.message, /foreign_key_check/);
+      assert.doesNotMatch(error.message, /fk_child|999|home-music-backup-failure-matrix-/);
+      return true;
+    };
+    await assert.rejects(verifyBackupArtifact(artifact.artifactPath), isRejected);
+    await assert.rejects(restoreBackupArtifact(artifact.artifactPath, databasePath), isRejected);
+    assert.equal(valueOf(databasePath), 'must-stay-live');
+  });
+});
+
+test('backup creation rejects source with orphaned foreign keys and removes partial output', async () => {
+  await inTemporaryDatabase(async (databasePath, outputRoot) => {
+    seedDatabase(databasePath);
+    const source = new DatabaseSync(databasePath);
+    try {
+      source.exec(`
+        CREATE TABLE fk_parent (id INTEGER PRIMARY KEY);
+        CREATE TABLE fk_child (id INTEGER PRIMARY KEY, parent_id INTEGER REFERENCES fk_parent(id));
+        PRAGMA foreign_keys = OFF;
+        INSERT INTO fk_child(id, parent_id) VALUES (1, 999);
+      `);
+      assert.equal(
+        (source.prepare('PRAGMA integrity_check;').get() as { integrity_check: string }).integrity_check,
+        'ok'
+      );
+      assert.notEqual(source.prepare('PRAGMA foreign_key_check;').get(), undefined);
+    } finally {
+      source.close();
+    }
+
+    await assert.rejects(
+      createBackupArtifact({ databasePath, outputRoot, createId: () => 'fk-orphan' }),
+      (error: unknown) => error instanceof BackupValidationError && /foreign_key_check/.test(error.message)
+    );
+    assert.deepEqual(await readdir(outputRoot), []);
+    assert.equal(valueOf(databasePath), 'committed-before');
+  });
+});
