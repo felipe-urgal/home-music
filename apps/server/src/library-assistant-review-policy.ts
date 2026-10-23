@@ -1,4 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
+import { SQLITE_BUSY_TIMEOUT_MS } from './sqlite-settings.js';
 import {
   DEFAULT_LIBRARY_ASSISTANT_REVIEW_POLICY,
   type LibraryAssistantArtworkReviewMode,
@@ -61,7 +62,7 @@ export class LibraryAssistantReviewPolicyStore {
     this.db = new DatabaseSync(databasePath);
     try {
       this.db.exec('PRAGMA foreign_keys = ON;');
-      this.db.exec('PRAGMA busy_timeout = 5000;');
+      this.db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`);
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS library_assistant_review_policy (
           singleton INTEGER PRIMARY KEY NOT NULL CHECK(singleton = 1),
