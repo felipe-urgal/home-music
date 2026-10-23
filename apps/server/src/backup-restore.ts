@@ -84,13 +84,19 @@ export class RestoreRollbackError extends Error {
   }
 }
 
-async function assertRegularFile(filePath: string, label: string) {
-  let info;
+// Only absence is optional: I/O failures must never skip a restore rollback snapshot.
+async function lstatIfExists(filePath: string) {
   try {
-    info = await lstat(filePath);
-  } catch {
-    throw new BackupValidationError(`${label} não encontrado.`);
+    return await lstat(filePath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException)?.code === 'ENOENT') return null;
+    throw error;
   }
+}
+
+async function assertRegularFile(filePath: string, label: string) {
+  const info = await lstatIfExists(filePath);
+  if (!info) throw new BackupValidationError(`${label} não encontrado.`);
   if (!info.isFile() || info.isSymbolicLink()) {
     throw new BackupValidationError(`${label} precisa ser um arquivo regular, sem symlink.`);
   }
@@ -213,7 +219,7 @@ function parseManifest(value: unknown): BackupManifest {
 }
 
 export async function verifyBackupArtifact(artifactPath: string) {
-  const artifactInfo = await lstat(artifactPath).catch(() => null);
+  const artifactInfo = await lstatIfExists(artifactPath);
   if (!artifactInfo || !artifactInfo.isDirectory() || artifactInfo.isSymbolicLink()) {
     throw new BackupValidationError('O artefato de backup precisa ser um diretório regular, sem symlink.');
   }
@@ -336,7 +342,7 @@ export async function restoreBackupArtifact(
   let rollbackReady = false;
   let replacementStarted = false;
 
-  const currentInfo = await lstat(databasePath).catch(() => null);
+  const currentInfo = await lstatIfExists(databasePath);
   if (currentInfo && (!currentInfo.isFile() || currentInfo.isSymbolicLink())) {
     throw new BackupValidationError('O banco atual precisa ser um arquivo regular, sem symlink.');
   }
