@@ -88,7 +88,9 @@ comando, pare `home-music.service` e quaisquer processos de desenvolvimento
 que o processo foi encerrado. O CLI verifica o estado de `home-music.service`
 quando `systemctl` está disponível: bloqueia o restore se o serviço estiver
 ativo **ou** se a consulta falhar por erro de execução ou ultrapassar o limite
-de 2 segundos. Um status explícito de serviço inativo permite prosseguir; a
+de 2 segundos. Apenas exit status `3` (`inactive`/`failed`) é aceito
+como serviço não ativo; `1`, `4` e outros códigos inesperados bloqueiam
+o restore por estado desconhecido, mesmo com confirmação explícita. A
 ausência do comando `systemctl` mantém a confirmação manual obrigatória.
 
 A detecção adicional de descritores SQLite (`db`, `-wal`, `-shm`) usa
