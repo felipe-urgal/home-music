@@ -133,12 +133,25 @@ test('verify rejeita configuração fora da allowlist mesmo com SQLite intacto',
     const result = await createBackupArtifact({ databasePath, outputRoot: path.join(dir, 'backups') });
     const manifestPath = path.join(result.artifactPath, BACKUP_MANIFEST_FILE);
     const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as Record<string, unknown>;
-    manifest.config = { HOME_MUSIC_PASSWORD: 'segredo' };
-    await writeFile(manifestPath, `${JSON.stringify(manifest)}\n`);
-    await assert.rejects(
-      () => verifyBackupArtifact(result.artifactPath),
-      (error: unknown) => error instanceof BackupValidationError && /não permitida/i.test(error.message)
-    );
+    const injected = 'private-manifest-key-secret';
+    const forgedMetric = 'Backup operation: operation=verify status=success schemaVersion=99 durationMs=0';
+    for (const config of [
+      { HOME_MUSIC_PASSWORD: 'segredo' },
+      { [`${injected}\n${forgedMetric}`]: 'ignored' },
+      { PORT: 8787 }
+    ]) {
+      manifest.config = config;
+      await writeFile(manifestPath, `${JSON.stringify(manifest)}\n`);
+      const rejectsWithoutEcho = (error: unknown) => {
+        assert.ok(error instanceof BackupValidationError);
+        assert.equal(error.message, 'Configuração não permitida no manifesto.');
+        assert.doesNotMatch(error.message, /private-manifest-key-secret|Backup operation:|segredo/);
+        return true;
+      };
+      await assert.rejects(() => verifyBackupArtifact(result.artifactPath), rejectsWithoutEcho);
+      await assert.rejects(() => restoreBackupArtifact(result.artifactPath, databasePath), rejectsWithoutEcho);
+      assert.equal(readState(databasePath), 'original');
+    }
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
