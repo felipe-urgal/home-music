@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -57,7 +57,15 @@ test('CLI reports backup metrics without exposing paths or secrets', async () =>
     assert.equal(invalid.status, 2);
     assert.match(invalid.stderr, /Backup operation: operation=restore status=failed schemaVersion=unknown durationMs=\d+/);
 
-    for (const result of [created, verified, failed, invalid]) {
+    const notDirectory = path.join(root, 'file-instead-of-directory');
+    await writeFile(notDirectory, 'this is not a directory');
+    const ioFailure = runCli(databasePath, ['create', '--output', path.join(notDirectory, 'backups')]);
+    assert.equal(ioFailure.status, 1);
+    assert.match(ioFailure.stderr, /Falha no create: Falha de I\/O na operação de backup\/restore/);
+    assert.match(ioFailure.stderr, /Backup operation: operation=create status=failed schemaVersion=unknown durationMs=\d+/);
+    assert.doesNotMatch(ioFailure.stderr, /home-music-backup-metrics-|private-test-secret|ENOTDIR/);
+
+    for (const result of [created, verified, failed, invalid, ioFailure]) {
       const metrics = result.stderr.split('\n').filter(line => line.startsWith('Backup operation:'));
       assert.equal(metrics.length, 1);
       assert.doesNotMatch(metrics[0], /private-test-secret|home-music\.db|backups|sha256|SHA-256/i);

@@ -70,5 +70,17 @@ export class BackupService {
 export function backupServiceErrorMessage(error: unknown) {
   if (error instanceof RestoreRollbackError) return error.message;
   if (error instanceof BackupValidationError) return error.message;
-  return error instanceof Error ? error.message : 'erro desconhecido';
+
+  // Native filesystem errors include absolute paths; do not echo them to CLI logs.
+  const code = (error as NodeJS.ErrnoException | null)?.code;
+  if (code === 'ENOSPC' || code === 'EDQUOT') {
+    return 'Espaço insuficiente para concluir a operação de backup/restore.';
+  }
+  if (code === 'EACCES' || code === 'EPERM') {
+    return 'Permissão insuficiente para acessar os arquivos de backup/dados.';
+  }
+  if (code === 'EROFS') {
+    return 'O volume de backup/dados está em modo somente leitura.';
+  }
+  return 'Falha de I/O na operação de backup/restore. Verifique o armazenamento e as permissões.';
 }
