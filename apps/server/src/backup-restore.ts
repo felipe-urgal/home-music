@@ -419,9 +419,13 @@ export async function restoreBackupArtifact(
       rm(installPath, { force: true }),
       rm(`${installPath}-wal`, { force: true }),
       rm(`${installPath}-shm`, { force: true }),
-      ...(rollbackReady && !replacementStarted
-        ? [rm(rollbackPath, { force: true })]
-        : [])
+      // Keep the only recovery copy if rollback itself failed after replacement.
+      // Otherwise also remove WAL/SHM created by inspecting the rollback snapshot.
+      ...(rollbackReady && replacementStarted ? [] : [
+        rm(rollbackPath, { force: true }),
+        rm(`${rollbackPath}-wal`, { force: true }),
+        rm(`${rollbackPath}-shm`, { force: true })
+      ])
     ]);
   }
 }
