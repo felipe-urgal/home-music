@@ -82,23 +82,35 @@ export class PersistentSessionManager extends SessionManager {
   override createSessionForUser(userId: string, now = Date.now(), clientName: string | null = null) {
     if (!userId || userId.length > 128) throw new RangeError('userId de sessão inválido.');
 
-    this.evictOldestPersistentSessionsForUser(userId);
-    if (this.countSessions() >= this.persistentMaxSessions) throw new SessionCapacityError();
+    // Eviction, capacity checks and INSERT must commit together. A failed login
+    // must never revoke an existing session without issuing its replacement.
+    this.db.exec('BEGIN IMMEDIATE;');
+    try {
+      this.evictOldestPersistentSessionsForUser(userId);
+      if (this.countSessions() >= this.persistentMaxSessions) throw new SessionCapacityError();
 
-    let token = '';
-    let tokenHash = '';
-    do {
-      token = randomBytes(32).toString('base64url');
-      tokenHash = hashSessionToken(token);
-    } while (this.sessionExists(tokenHash));
+      let token = '';
+      let tokenHash = '';
+      do {
+        token = randomBytes(32).toString('base64url');
+        tokenHash = hashSessionToken(token);
+      } while (this.sessionExists(tokenHash));
 
-    this.db.prepare(`
-      INSERT INTO auth_sessions(
-        token_hash, user_id, created_at, authenticated_at, last_seen_at, client_name
-      ) VALUES (?, ?, ?, ?, ?, ?)
-    `).run(tokenHash, userId, now, now, now, clientName);
-
-    return token;
+      this.db.prepare(`
+        INSERT INTO auth_sessions(
+          token_hash, user_id, created_at, authenticated_at, last_seen_at, client_name
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `).run(tokenHash, userId, now, now, now, clientName);
+      this.db.exec('COMMIT;');
+      return token;
+    } catch (error) {
+      try {
+        this.db.exec('ROLLBACK;');
+      } catch {
+        // Preserve the original SQLite or capacity error.
+      }
+      throw error;
+    }
   }
 
   override getSession(token: string | undefined, now = Date.now()): AuthSession | null {
