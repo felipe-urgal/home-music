@@ -266,3 +266,85 @@ test('persistent sessions use the shared timeout and fail explicitly on a held S
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+
+test('failed session INSERT rolls back oldest-session eviction and preserves existing tokens', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'home-music-session-atomic-eviction-'));
+  const databasePath = path.join(directory, 'home-music.db');
+  let sessions: PersistentSessionManager | null = null;
+  try {
+    const schema = new HomeMusicDatabase(databasePath);
+    schema.close();
+    insertUser(databasePath);
+
+    sessions = new PersistentSessionManager(databasePath, 4, 2);
+    const first = sessions.createSessionForUser('user-1', 1_000);
+    const second = sessions.createSessionForUser('user-1', 2_000);
+
+    // The old implementation evicted "first" before attempting this INSERT.
+    const triggerDb = new DatabaseSync(databasePath);
+    try {
+      triggerDb.exec(`
+        CREATE TRIGGER reject_new_session
+        BEFORE INSERT ON auth_sessions
+        WHEN NEW.client_name = 'reject-insert'
+        BEGIN SELECT RAISE(ABORT, 'injected session write failure'); END;
+      `);
+    } finally {
+      triggerDb.close();
+    }
+
+    const activeSessions = sessions;
+    assert.throws(
+      () => activeSessions.createSessionForUser('user-1', 3_000, 'reject-insert'),
+      /injected session write failure/
+    );
+    assert.equal(activeSessions.validateSession(first), true, 'oldest session was revoked by failed login');
+    assert.equal(activeSessions.validateSession(second), true);
+    assert.equal(activeSessions.listUserSessions('user-1', second)?.length, 2);
+
+    const replacement = activeSessions.createSessionForUser('user-1', 4_000, 'normal-login');
+    assert.equal(activeSessions.validateSession(first), false, 'successful login must still evict oldest');
+    assert.equal(activeSessions.validateSession(second), true);
+    assert.equal(activeSessions.validateSession(replacement), true);
+    assert.equal(activeSessions.listUserSessions('user-1', replacement)?.length, 2);
+  } finally {
+    sessions?.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test('global session capacity rejection does not revoke an unrelated user session', async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'home-music-session-global-capacity-'));
+  const databasePath = path.join(directory, 'home-music.db');
+  let firstOwner: PersistentSessionManager | null = null;
+  let secondOwner: PersistentSessionManager | null = null;
+  try {
+    const schema = new HomeMusicDatabase(databasePath);
+    schema.close();
+    insertUser(databasePath);
+    insertUser(databasePath, 'user-2');
+
+    firstOwner = new PersistentSessionManager(databasePath, 2, 2);
+    secondOwner = new PersistentSessionManager(databasePath, 2, 2);
+    const first = firstOwner.createSessionForUser('user-1', 1_000);
+    const second = secondOwner.createSessionForUser('user-2', 2_000);
+
+    const sessions = firstOwner;
+    assert.throws(
+      () => sessions.createSessionForUser('user-1', 3_000),
+      error => error instanceof Error && error.name === 'SessionCapacityError'
+    );
+    assert.equal(firstOwner.validateSession(first), true);
+    assert.equal(secondOwner.validateSession(second), true);
+
+    secondOwner.revokeSession(second);
+    const replacement = firstOwner.createSessionForUser('user-1', 4_000);
+    assert.equal(firstOwner.validateSession(first), true);
+    assert.equal(firstOwner.validateSession(replacement), true);
+  } finally {
+    secondOwner?.close();
+    firstOwner?.close();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
