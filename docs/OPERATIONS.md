@@ -100,7 +100,11 @@ processos individuais podem estar inacessíveis por permissão, então a
 verificação automática é uma proteção complementar, não substitui a conferência
 operacional. Em outras plataformas ou hosts sem `systemctl`, o operador precisa
 confirmar manualmente que não há processos usando os arquivos antes do restore.
-O guard é reexecutado imediatamente antes da troca de banco.
+O guard é reexecutado imediatamente antes da troca de banco. Depois da
+verificação inicial do artefato e da confirmação offline, o restore também
+reconfere **tamanho e SHA-256 do SQLite preparado** antes de remover os
+sidecars do banco atual. Qualquer divergência aborta sem substituir o banco
+existente; o snapshot de rollback e os arquivos temporários são limpos.
 
 Restore real não deve ser usado como teste. O smoke seguro é:
 
