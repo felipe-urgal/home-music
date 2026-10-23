@@ -122,8 +122,9 @@ function firstValue(row: Row | undefined) {
 }
 
 function databaseInfo(databasePath: string) {
-  const db = new DatabaseSync(databasePath, { readOnly: true, timeout: SQLITE_BUSY_TIMEOUT_MS });
+  let db: DatabaseSync | null = null;
   try {
+    db = new DatabaseSync(databasePath, { readOnly: true, timeout: SQLITE_BUSY_TIMEOUT_MS });
     const integrityRows = db.prepare('PRAGMA integrity_check;').all() as Row[];
     const integrityOk = integrityRows.length === 1 && firstValue(integrityRows[0]) === 'ok';
     if (!integrityOk) {
@@ -137,10 +138,10 @@ function databaseInfo(databasePath: string) {
     return { schemaVersion };
   } catch (error) {
     if (error instanceof BackupValidationError) throw error;
-    const message = error instanceof Error ? error.message : 'erro desconhecido';
-    throw new BackupValidationError(`Não foi possível validar o SQLite do backup: ${message}`);
+    // SQLite/OS errors may contain physical paths. Do not leak those in CLI output.
+    throw new BackupValidationError('Não foi possível validar o SQLite do backup: arquivo inacessível ou inválido.');
   } finally {
-    db.close();
+    db?.close();
   }
 }
 
