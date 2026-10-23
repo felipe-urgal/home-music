@@ -152,3 +152,84 @@ test('restore refuses an active systemd service even with explicit operator conf
     await rm(root, { recursive: true, force: true });
   }
 });
+
+
+test('restore blocks when systemctl fails or hangs, but accepts an explicitly inactive service', async t => {
+  if (process.platform === 'win32') {
+    t.skip('This test uses POSIX executable modes and a shell-based systemctl double');
+    return;
+  }
+  const root = await mkdtemp(path.join(os.tmpdir(), 'home-music-restore-systemctl-errors-'));
+  const databasePath = path.join(root, 'home-music.db');
+  const outputRoot = path.join(root, 'backups');
+  try {
+    const db = new DatabaseSync(databasePath);
+    try {
+      db.exec("CREATE TABLE state(value TEXT NOT NULL); INSERT INTO state(value) VALUES ('backup'); PRAGMA user_version = 1;");
+    } finally {
+      db.close();
+    }
+
+    const created = runCli(databasePath, ['create', '--output', outputRoot]);
+    assert.equal(created.status, 0, created.stderr);
+    const [artifactName] = await readdir(outputRoot);
+    assert.ok(artifactName?.endsWith('.backup'));
+    const artifactPath = path.join(outputRoot, artifactName);
+    const live = new DatabaseSync(databasePath);
+    try {
+      live.prepare('UPDATE state SET value = ?').run('live-must-survive');
+    } finally {
+      live.close();
+    }
+
+    const binDir = path.join(root, 'bin');
+    await mkdir(binDir);
+    const commandPath = path.join(binDir, 'systemctl');
+    // Isolate PATH so execvp cannot fall through to the runner's real systemctl.
+    const env = { PATH: binDir };
+    const restoreArgs = ['restore', '--artifact', artifactPath, '--confirm-service-stopped'];
+
+    for (const scenario of [
+      { label: 'not executable', script: '#!/bin/sh\nexit 3\n', mode: 0o644 },
+      { label: 'unresponsive', script: '#!/bin/sh\n/bin/sleep 10\n', mode: 0o755 }
+    ]) {
+      await writeFile(commandPath, scenario.script);
+      await chmod(commandPath, scenario.mode);
+      const result = runCli(databasePath, restoreArgs, env);
+      assert.equal(result.status, 1, scenario.label + ': ' + result.stderr);
+      assert.match(result.stderr, /Não foi possível verificar o estado de home-music\.service/);
+      assert.match(result.stderr, /Backup operation: operation=restore status=blocked schemaVersion=unknown durationMs=\d+/);
+      assert.doesNotMatch(result.stderr, /home-music-restore-systemctl-errors-|private-test-secret-never-log/);
+      assert.equal(result.stderr.split('\n').filter(line => line.startsWith('Backup operation:')).length, 1);
+
+      const unchanged = new DatabaseSync(databasePath, { readOnly: true });
+      try {
+        assert.equal(
+          (unchanged.prepare('SELECT value FROM state').get() as { value: string }).value,
+          'live-must-survive'
+        );
+      } finally {
+        unchanged.close();
+      }
+    }
+
+    // An explicit inactive status (systemctl exit 3) retains the existing
+    // operator-confirmed restore behavior, avoiding a false dependency on systemd.
+    await writeFile(commandPath, '#!/bin/sh\nexit 3\n');
+    await chmod(commandPath, 0o755);
+    const inactive = runCli(databasePath, restoreArgs, env);
+    assert.equal(inactive.status, 0, inactive.stderr);
+    assert.match(inactive.stderr, /Backup operation: operation=restore status=success schemaVersion=1 durationMs=\d+/);
+    const restored = new DatabaseSync(databasePath, { readOnly: true });
+    try {
+      assert.equal(
+        (restored.prepare('SELECT value FROM state').get() as { value: string }).value,
+        'backup'
+      );
+    } finally {
+      restored.close();
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
