@@ -232,9 +232,10 @@ export async function verifyBackupArtifact(artifactPath: string) {
   }
   const databaseStat = await assertRegularFile(databasePath, 'SQLite do backup');
 
+  const manifestText = await readFile(manifestPath, 'utf8');
   let parsed: unknown;
   try {
-    parsed = JSON.parse(await readFile(manifestPath, 'utf8'));
+    parsed = JSON.parse(manifestText);
   } catch {
     throw new BackupValidationError('Manifesto do backup não contém JSON válido.');
   }
