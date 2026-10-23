@@ -342,6 +342,7 @@ export async function restoreBackupArtifact(
   const rollbackPath = path.join(databaseDir, `.home-music-rollback-${id}.db`);
   let rollbackReady = false;
   let replacementStarted = false;
+  let installed = false;
 
   const currentInfo = await lstatIfExists(databasePath);
   if (currentInfo && (!currentInfo.isFile() || currentInfo.isSymbolicLink())) {
@@ -363,6 +364,7 @@ export async function restoreBackupArtifact(
     await rm(`${databasePath}-wal`, { force: true });
     await rm(`${databasePath}-shm`, { force: true });
     await rename(installPath, databasePath);
+    installed = true;
     await chmod(databasePath, 0o600);
     databaseInfo(databasePath);
     await options.afterReplace?.(databasePath);
@@ -376,21 +378,34 @@ export async function restoreBackupArtifact(
       manifest: verified.manifest
     };
   } catch (restoreError) {
-    if (replacementStarted && rollbackReady) {
+    if (replacementStarted && (rollbackReady || (installed && !currentInfo))) {
       try {
         await rm(`${databasePath}-wal`, { force: true });
         await rm(`${databasePath}-shm`, { force: true });
-        await rename(rollbackPath, databasePath);
-        await chmod(databasePath, 0o600);
-        databaseInfo(databasePath);
-        rollbackReady = false;
+        if (rollbackReady) {
+          await rename(rollbackPath, databasePath);
+          await chmod(databasePath, 0o600);
+          databaseInfo(databasePath);
+          rollbackReady = false;
+        } else {
+          // A previously absent database must remain absent after a failed restore.
+          await rm(databasePath, { force: true });
+        }
       } catch (rollbackError) {
         throw new RestoreRollbackError(restoreError, rollbackError);
       }
     }
     throw restoreError;
   } finally {
-    await rm(installPath, { force: true });
-    if (rollbackReady && !replacementStarted) await rm(rollbackPath, { force: true });
+    // SQLite inspection of the staging file can create WAL/SHM sidecars; rename
+    // moves only the DB file, so remove all staging paths after closing SQLite.
+    await Promise.all([
+      rm(installPath, { force: true }),
+      rm(`${installPath}-wal`, { force: true }),
+      rm(`${installPath}-shm`, { force: true }),
+      ...(rollbackReady && !replacementStarted
+        ? [rm(rollbackPath, { force: true })]
+        : [])
+    ]);
   }
 }
