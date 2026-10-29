@@ -570,15 +570,6 @@
     font: inherit;
     font-size: 10px;
   }
-
-  .desktop-layout[data-desktop-active="player"] .desktop-context__heading small {
-    display: none;
-  }
-
-  .desktop-layout[data-desktop-active="player"] .desktop-context__summary {
-    margin-top: 9px;
-    margin-bottom: 8px;
-  }
 }
 
 @media (min-width: 1380px) {

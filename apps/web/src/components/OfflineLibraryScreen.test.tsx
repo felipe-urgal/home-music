@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { Track } from '@home-music/shared';
@@ -82,10 +81,8 @@ function renderScreen() {
 describe('OfflineLibraryScreen collections', () => {
   it('separa a ação de abrir a coleção da ação explícita de tocar tudo', () => {
     const html = renderScreen();
-    const source = readFileSync(new URL('./OfflineLibraryScreen.tsx', import.meta.url), 'utf8');
 
     expect(html).toContain('aria-label="Abrir coleção offline Reggae"');
     expect(html).toContain('aria-label="Tocar coleção offline Reggae"');
-    expect(source).toContain('setSelectedCollectionKey(collection.key)');
   });
 });

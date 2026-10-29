@@ -9,7 +9,7 @@
 @media (min-width: 1024px) {
   .desktop-layout {
     position: relative;
-    grid-template-columns: var(--desktop-sidebar-width, 236px) minmax(0, 1fr) var(--desktop-context-width, 340px);
+    grid-template-columns: var(--desktop-sidebar-width, 236px) minmax(0, 1fr);
     transition: grid-template-columns 180ms ease;
   }
 
@@ -329,90 +329,6 @@
     display: none;
   }
 
-  .desktop-context {
-    position: relative;
-    padding: 22px 18px 18px;
-    background: rgba(5, 10, 14, 0.97);
-  }
-
-  .desktop-context__resizer {
-    position: absolute;
-    z-index: 40;
-    left: -7px;
-    top: 0;
-    bottom: 0;
-    width: 14px;
-    display: grid;
-    place-items: center;
-    cursor: col-resize;
-    touch-action: none;
-  }
-
-  .desktop-context__resizer > span {
-    width: 20px;
-    height: 44px;
-    display: grid;
-    place-items: center;
-    border: 1px solid rgba(77, 174, 255, 0.2);
-    border-radius: 9px;
-    background: rgba(10, 24, 35, 0.96);
-    color: #8293a1;
-    opacity: 0;
-    transition: opacity 120ms ease, border-color 120ms ease, color 120ms ease;
-  }
-
-  .desktop-context__resizer:hover > span,
-  .desktop-context__resizer:focus-visible > span,
-  .is-resizing-desktop-context .desktop-context__resizer > span {
-    opacity: 1;
-    color: #6fbcfa;
-    border-color: rgba(77, 174, 255, 0.46);
-  }
-
-  .desktop-context__resizer svg {
-    width: 15px;
-    height: 15px;
-  }
-
-  body.is-resizing-desktop-context,
-  body.is-resizing-desktop-context * {
-    cursor: col-resize !important;
-    user-select: none !important;
-  }
-
-  .desktop-context__heading--queue {
-    min-height: 34px;
-    justify-content: flex-start;
-    gap: 6px;
-    margin-bottom: 12px;
-  }
-
-  .desktop-context__heading--queue strong {
-    font-size: 16px;
-  }
-
-  .desktop-context__heading--queue > span {
-    color: #9aa5af;
-    font-size: 13px;
-    font-weight: 500;
-  }
-
-  .desktop-context__heading--queue small {
-    margin-left: auto;
-  }
-
-  .desktop-context__current {
-    display: grid;
-    gap: 8px;
-  }
-
-  .desktop-context__current > strong,
-  .desktop-queue__header strong {
-    color: #e3e9ee;
-    font-size: 13px;
-    font-weight: 680;
-  }
-
   .desktop-now-playing {
     min-height: 70px;
     padding: 9px;
@@ -423,92 +339,6 @@
   .desktop-now-playing .artwork {
     width: 54px;
     height: 54px;
-  }
-
-  .desktop-now-playing__text strong {
-    font-size: 13px;
-  }
-
-  .desktop-now-playing__text small {
-    font-size: 12px;
-  }
-
-  .desktop-context__tabs {
-    margin-top: 12px;
-  }
-
-  .desktop-queue {
-    margin-top: 14px;
-    padding-top: 10px;
-  }
-
-  .desktop-queue__header {
-    margin-bottom: 6px;
-  }
-
-  .desktop-queue__header span {
-    font-size: 12px;
-  }
-
-  .desktop-queue__row {
-    min-width: 0;
-    display: grid;
-    grid-template-columns: 25px minmax(0, 1fr);
-    align-items: center;
-    border-radius: 9px;
-  }
-
-  .desktop-queue__row.is-drag-over {
-    background: rgba(53, 159, 244, 0.09);
-    box-shadow: inset 0 1px 0 rgba(79, 177, 255, 0.32);
-  }
-
-  .desktop-queue__row.is-dragging {
-    opacity: 0.48;
-  }
-
-  .desktop-queue__drag-handle {
-    width: 25px;
-    height: 42px;
-    display: grid;
-    place-items: center;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: #66727d;
-    cursor: grab;
-  }
-
-  .desktop-queue__drag-handle:disabled {
-    opacity: .3;
-  }
-
-  .desktop-queue__drag-handle svg {
-    width: 15px;
-    height: 15px;
-  }
-
-  .desktop-queue__item {
-    min-height: 54px;
-    gap: 10px;
-  }
-
-  .desktop-queue__item .artwork {
-    width: 40px;
-    height: 40px;
-  }
-
-  .desktop-queue__item strong {
-    font-size: 13px;
-  }
-
-  .desktop-queue__item small {
-    color: #8c98a3;
-    font-size: 12px;
-  }
-
-  .desktop-queue__remaining {
-    font-size: 11px;
   }
 }
 

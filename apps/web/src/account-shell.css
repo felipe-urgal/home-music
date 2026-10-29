@@ -4,10 +4,6 @@
     grid-template-columns: var(--desktop-sidebar-width, 220px) minmax(0, 1fr);
   }
 
-  .desktop-layout:has(.desktop-account-surface) .desktop-context {
-    display: none;
-  }
-
   .desktop-layout:has(.desktop-account-surface) .desktop-account-surface {
     height: calc(100% - var(--desktop-player-height, 88px));
     padding-bottom: 28px;

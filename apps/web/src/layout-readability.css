@@ -57,15 +57,6 @@
   #root .desktop-now-playing {
     padding: 0.6875rem;
   }
-
-  #root .desktop-queue__item {
-    min-height: var(--hm-compact-row);
-    padding-block: 0.4375rem;
-  }
-
-  #root .desktop-context__action {
-    min-height: var(--hm-control-height);
-  }
 }
 
 /* Administration overview and integrity */
