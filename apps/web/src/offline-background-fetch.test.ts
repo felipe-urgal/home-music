@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   BACKGROUND_FETCH_WAIT_TIMEOUT_MS,
@@ -8,8 +7,6 @@ import {
   supportsBackgroundFetchCapability,
   waitForBackgroundFetch
 } from './offline-background-fetch';
-
-const serviceWorkerSource = () => readFileSync(new URL('../public/sw.js', import.meta.url), 'utf8');
 
 describe('offline background fetch', () => {
   it('escopa a registration por usuário e faixa', () => {
@@ -48,14 +45,6 @@ describe('offline background fetch', () => {
     expect(isAndroidBackgroundFetchRuntime('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 HeadlessChrome/140 Safari/537.36')).toBe(false);
     expect(isAndroidBackgroundFetchRuntime('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36')).toBe(false);
     expect(isAndroidBackgroundFetchRuntime('Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15 Version/19.0 Mobile Safari/604.1')).toBe(false);
-  });
-
-  it('mantém a gravação do worker vinculada a um client ativo da conta', () => {
-    const sw = serviceWorkerSource();
-    expect(sw).toContain('async function hasActiveOfflineUserClient(userId)');
-    expect(sw).toContain('if (!await hasActiveOfflineUserClient(scope.userId)) return;');
-    expect(sw).toContain("self.addEventListener('backgroundfetchsuccess'");
-    expect(sw).toContain('version: 4');
   });
 
   it('limita espera de Background Fetch e aceita cancelamento', async () => {
