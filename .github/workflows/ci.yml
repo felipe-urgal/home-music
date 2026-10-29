@@ -38,6 +38,9 @@ jobs:
 
       - uses: ./.github/actions/setup
 
+      - name: Shared build
+        run: npm run build -w @home-music/shared
+
       - name: Unit tests
         run: npm run test -w @home-music/web
 
