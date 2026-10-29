@@ -19,7 +19,7 @@
     "service:install": "bash scripts/install-systemd.sh install",
     "service:update": "bash scripts/service-update-with-checkpoint.sh",
     "service:status": "systemctl status home-music --no-pager",
-    "prod:status": "npm run service:status",
+    "prod:status": "node scripts/production-status.mjs",
     "prod:check": "npm run check && npm run smoke:production",
     "prod:backup": "npm run backup:create --",
     "prod:deploy": "npm run service:update",
