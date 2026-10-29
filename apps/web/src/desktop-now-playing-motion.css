@@ -1,0 +1,419 @@
+/* Motion da tela Now Playing desktop. Só transform/opacity/filter/clip-path; desligado com prefers-reduced-motion. */
+
+/* A tela não rola: sem gutter reservado, o fundo chega até a borda direita (antes sobrava uma faixa escura de ~10px). */
+#root .desktop-layout[data-offline="false"] .phone-surface.desktop-now-playing-surface {
+  scrollbar-gutter: auto;
+}
+
+/* Card "Próxima música" assume a cor da capa da próxima faixa (acento já usado na waveform). */
+#root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track {
+  --next-accent: #ff9f49;
+  border-color: color-mix(in srgb, var(--next-accent) 38%, rgba(232, 211, 190, .12));
+  background:
+    radial-gradient(120% 220% at 0% 50%, color-mix(in srgb, var(--next-accent) 34%, transparent), transparent 62%),
+    linear-gradient(90deg, color-mix(in srgb, var(--next-accent) 14%, rgba(8, 13, 22, .72)), rgba(8, 13, 22, .62));
+  box-shadow:
+    0 12px 30px rgba(0, 0, 0, .22),
+    0 0 34px color-mix(in srgb, var(--next-accent) 22%, transparent);
+}
+
+#root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track:hover {
+  border-color: color-mix(in srgb, var(--next-accent) 62%, rgba(232, 211, 190, .12));
+  background:
+    radial-gradient(120% 220% at 0% 50%, color-mix(in srgb, var(--next-accent) 44%, transparent), transparent 66%),
+    linear-gradient(90deg, color-mix(in srgb, var(--next-accent) 20%, rgba(10, 16, 26, .8)), rgba(10, 16, 26, .72));
+}
+
+#root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track-copy small {
+  color: color-mix(in srgb, var(--next-accent) 78%, #fff);
+}
+
+#root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track > svg {
+  color: color-mix(in srgb, var(--next-accent) 70%, #fff);
+}
+
+/* Duplo clique em controles visuais não deve selecionar a capa nem iniciar arraste de imagem. */
+#root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__art,
+#root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__art *,
+#root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track,
+#root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track *,
+#root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform-progress,
+#root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform-progress * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Waveform acompanha a largura do bloco de identidade: o fim da onda alinha com o botão de 3 pontos. */
+#root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform-progress {
+  width: 100%;
+}
+
+/* Fundo: a capa vira atmosfera (desfocada, saturada) com escurecimento só onde há texto. */
+#root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__backdrop {
+  --np-backdrop-opacity: .62;
+  opacity: var(--np-backdrop-opacity);
+  filter: blur(64px) saturate(1.45);
+  transform: scale(1.16);
+  background-image:
+    linear-gradient(180deg, rgba(5, 8, 14, 0) 45%, rgba(5, 8, 14, .6) 100%),
+    linear-gradient(90deg, rgba(5, 8, 14, .28) 0%, rgba(5, 8, 14, .58) 52%, rgba(5, 8, 14, .74) 100%),
+    var(--now-playing-artwork);
+  will-change: transform, opacity;
+}
+
+/* Capa que entra no crossfade usa o mesmo tratamento do fundo atual. */
+#root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__backdrop-incoming {
+  background-image:
+    linear-gradient(180deg, rgba(5, 8, 14, 0) 45%, rgba(5, 8, 14, .6) 100%),
+    linear-gradient(90deg, rgba(5, 8, 14, .28) 0%, rgba(5, 8, 14, .58) 52%, rgba(5, 8, 14, .74) 100%),
+    var(--now-playing-artwork, radial-gradient(circle at 42% 38%, rgba(198, 85, 45, .18), transparent 42rem));
+}
+
+
+@media (prefers-reduced-motion: no-preference) {
+  /* ---------- Entrada em cascata (abrir a tela) ---------- */
+  @keyframes np-rise {
+    from { opacity: 0; transform: translateY(16px); filter: blur(6px); }
+    to   { opacity: 1; transform: none; filter: none; }
+  }
+
+  @keyframes np-art-in {
+    0%   { opacity: 0; transform: translateY(22px) scale(.93) rotate(-1.6deg); filter: blur(12px) saturate(1.5); }
+    60%  { opacity: 1; filter: blur(0) saturate(1.1); }
+    100% { opacity: 1; transform: none; filter: none; }
+  }
+
+  @keyframes np-copy-in {
+    from { opacity: 0; transform: translateX(-18px); filter: blur(8px); }
+    to   { opacity: 1; transform: none; filter: none; }
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__art-frame[data-motion="init"] {
+    animation: np-art-in 760ms cubic-bezier(.2, .85, .2, 1) 40ms backwards;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__art-frame[data-motion="a"] {
+    animation: np-art-in 760ms cubic-bezier(.2, .85, .2, 1) backwards;
+  }
+
+  /* Mesmo keyframe com outro nome reinicia a animação em trocas manuais consecutivas. */
+  @keyframes np-art-in-b {
+    0%   { opacity: 0; transform: translateY(22px) scale(.93) rotate(-1.6deg); filter: blur(12px) saturate(1.5); }
+    60%  { opacity: 1; filter: blur(0) saturate(1.1); }
+    100% { opacity: 1; transform: none; filter: none; }
+  }
+
+  @keyframes np-copy-in-b {
+    from { opacity: 0; transform: translateX(-18px); filter: blur(8px); }
+    to   { opacity: 1; transform: none; filter: none; }
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__art-frame[data-motion="b"] {
+    animation: np-art-in-b 760ms cubic-bezier(.2, .85, .2, 1) backwards;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__identity-row[data-motion="init"] {
+    animation: np-rise 640ms cubic-bezier(.2, .8, .2, 1) 160ms backwards;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__identity-row[data-motion="a"] {
+    animation: np-copy-in 560ms cubic-bezier(.2, .8, .2, 1) 90ms backwards;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__identity-row[data-motion="b"] {
+    animation: np-copy-in-b 560ms cubic-bezier(.2, .8, .2, 1) 90ms backwards;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__current-lyric {
+    animation: np-rise 640ms cubic-bezier(.2, .8, .2, 1) 260ms backwards;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform-progress {
+    animation: np-rise 640ms cubic-bezier(.2, .8, .2, 1) 340ms backwards;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__quote {
+    animation: np-rise 900ms cubic-bezier(.2, .8, .2, 1) 700ms backwards;
+  }
+
+  /* ---------- Troca de capa durante o crossfade: revelação circular + foco ---------- */
+  .now-playing-transition-art {
+    position: relative;
+  }
+
+  .now-playing-transition-art.is-polished .now-playing-vinyl__label--incoming {
+    clip-path: circle(calc(var(--now-playing-crossfade-incoming-opacity, 0) * 78%) at 50% 50%);
+    filter:
+      blur(calc((1 - var(--now-playing-crossfade-incoming-opacity, 0)) * 14px))
+      saturate(calc(1.5 - var(--now-playing-crossfade-incoming-opacity, 0) * .5));
+    transition-property: opacity, transform, clip-path, filter;
+  }
+
+  .now-playing-transition-art.is-polished .now-playing-vinyl__label--outgoing.is-crossfading {
+    transform: scale(calc(1 - (1 - var(--now-playing-crossfade-outgoing-opacity, 1)) * .08));
+    filter: blur(calc((1 - var(--now-playing-crossfade-outgoing-opacity, 1)) * 6px)) brightness(calc(.6 + var(--now-playing-crossfade-outgoing-opacity, 1) * .4));
+    transition-property: opacity, transform, filter;
+  }
+
+  /* Anel de choque: nasce no começo da troca, expande e some no fim. */
+  .now-playing-transition-art.is-polished.is-crossfading::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    border: 2px solid var(--now-playing-wave-accent, #ff9f49);
+    border-radius: 14px;
+    pointer-events: none;
+    opacity: calc(var(--now-playing-crossfade-incoming-opacity, 0) * (1 - var(--now-playing-crossfade-incoming-opacity, 0)) * 2.4);
+    transform: scale(calc(.96 + var(--now-playing-crossfade-incoming-opacity, 0) * .2));
+    box-shadow: 0 0 36px color-mix(in srgb, var(--now-playing-wave-accent, #ff9f49) 55%, transparent);
+    transition: opacity 70ms linear, transform 70ms linear;
+  }
+
+  /* ---------- Play/pause da capa ---------- */
+  @keyframes np-icon-pop {
+    from { opacity: 0; transform: scale(.4) rotate(-40deg); }
+    70%  { transform: scale(1.12) rotate(4deg); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__cover-play-icon > svg {
+    animation: np-icon-pop 280ms cubic-bezier(.3, 1.4, .5, 1) backwards;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__cover-play:active .desktop-now-playing-screen__cover-play-icon {
+    transform: scale(.92);
+  }
+
+  /* ---------- Waveform real: onda sobe em sequência, barra segue o cursor ---------- */
+  @keyframes np-bar-rise {
+    from { opacity: 0; transform: scaleY(.04); }
+    60%  { opacity: 1; }
+    to   { opacity: 1; transform: scaleY(1); }
+  }
+
+  @keyframes np-bar-idle {
+    0%, 100% { transform: scaleY(1); opacity: .35; }
+    50%      { transform: scaleY(2.6); opacity: .7; }
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform span {
+    transform-origin: center;
+    scale: 1 1;
+    transition: scale 110ms ease-out;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform[data-status="loading"] span {
+    animation: np-bar-idle 1100ms ease-in-out infinite;
+    animation-delay: calc(var(--bar-index, 0) * 28ms);
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform:not([data-status="loading"]) span {
+    animation: np-bar-rise 620ms cubic-bezier(.2, .9, .25, 1) backwards;
+    animation-delay: calc(var(--bar-index, 0) * 11ms);
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform-progress {
+    --wave-hover-x: -1;
+  }
+
+  /* Barras próximas ao ponteiro "levantam" (distância em fração da largura). */
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__waveform span {
+    scale: 1 calc(1 + max(0, .34 - abs(var(--bar-x, 0) - var(--wave-hover-x, -1)) * 2.2));
+  }
+
+  /* ---------- Card "Próxima música": desliza, capa pinga, brilho varre, linha mostra o tempo ---------- */
+  @keyframes np-next-in {
+    0%   { opacity: 0; transform: translateX(46px) scale(.96); filter: blur(10px); }
+    100% { opacity: 1; transform: none; filter: none; }
+  }
+
+  @keyframes np-next-art {
+    0%   { opacity: 0; transform: scale(.55) rotate(-12deg); }
+    65%  { opacity: 1; transform: scale(1.08) rotate(2deg); }
+    100% { opacity: 1; transform: none; }
+  }
+
+  @keyframes np-next-sweep {
+    from { transform: translateX(-120%) skewX(-18deg); }
+    to   { transform: translateX(260%) skewX(-18deg); }
+  }
+
+  @keyframes np-next-copy {
+    from { opacity: 0; transform: translateX(14px); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track {
+    animation: np-next-in 720ms cubic-bezier(.16, .9, .2, 1) 420ms backwards;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track > .artwork {
+    animation: np-next-art 700ms cubic-bezier(.3, 1.2, .4, 1) 560ms backwards;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track-copy > * {
+    animation: np-next-copy 520ms cubic-bezier(.2, .8, .2, 1) backwards;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track-copy > :nth-child(1) { animation-delay: 640ms; }
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track-copy > :nth-child(2) { animation-delay: 720ms; }
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track-copy > :nth-child(3) { animation-delay: 800ms; }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track::before {
+    content: '';
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 40%;
+    pointer-events: none;
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--next-accent, #ffe0b2) 48%, transparent), transparent);
+    animation: np-next-sweep 1100ms ease-out 900ms backwards;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__next-track::after {
+    content: '';
+    position: absolute;
+    inset: auto 0 0 0;
+    height: 3px;
+    pointer-events: none;
+    transform-origin: left center;
+    transform: scaleX(var(--next-progress, 0));
+    background: linear-gradient(90deg, color-mix(in srgb, var(--next-accent, #ff9f49) 70%, #fff), var(--next-accent, #ff9f49));
+    opacity: .95;
+    transition: transform 400ms linear;
+  }
+
+  /* ---------- Fundo vivo: deriva lenta enquanto toca; troca manual faz fade + desfoque ---------- */
+  @keyframes np-backdrop-drift {
+    from { transform: scale(1.16) translate3d(0, 0, 0); }
+    to   { transform: scale(1.3) translate3d(-2.5%, 1.8%, 0); }
+  }
+
+  @keyframes np-backdrop-swap {
+    from { opacity: 0; filter: blur(110px) saturate(1.9); }
+  }
+
+  @keyframes np-backdrop-swap-b {
+    from { opacity: 0; filter: blur(110px) saturate(1.9); }
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__backdrop {
+    animation: np-backdrop-drift 46s ease-in-out infinite alternate;
+    animation-play-state: paused;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__backdrop[data-playing="true"] {
+    animation-play-state: running;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__backdrop[data-motion="a"] {
+    animation: np-backdrop-drift 46s ease-in-out infinite alternate, np-backdrop-swap 900ms ease-out;
+    animation-play-state: paused, running;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__backdrop[data-motion="b"] {
+    animation: np-backdrop-drift 46s ease-in-out infinite alternate, np-backdrop-swap-b 900ms ease-out;
+    animation-play-state: paused, running;
+  }
+
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__backdrop[data-motion="a"][data-playing="true"],
+  #root .desktop-layout[data-offline="false"] .desktop-now-playing-screen__backdrop[data-motion="b"][data-playing="true"] {
+    animation-play-state: running, running;
+  }
+
+  /* ---------- Menu dos 3 pontos: abre do canto do botão, itens em cascata ---------- */
+  @keyframes np-menu-in {
+    from { opacity: 0; transform: translateY(-8px) scale(.92); filter: blur(6px); }
+    to   { opacity: 1; transform: none; filter: none; }
+  }
+
+  @keyframes np-menu-item {
+    from { opacity: 0; transform: translateX(10px); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  @keyframes np-submenu-in {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  .desktop-now-playing-screen__more-menu--portal {
+    transform-origin: top right;
+    animation: np-menu-in 240ms cubic-bezier(.2, .9, .25, 1.15) backwards;
+  }
+
+  .desktop-now-playing-screen__more-menu--portal > button {
+    animation: np-menu-item 300ms cubic-bezier(.2, .8, .2, 1) backwards;
+  }
+
+  .desktop-now-playing-screen__more-menu--portal > button:nth-of-type(1) { animation-delay: 60ms; }
+  .desktop-now-playing-screen__more-menu--portal > button:nth-of-type(2) { animation-delay: 100ms; }
+  .desktop-now-playing-screen__more-menu--portal > button:nth-of-type(3) { animation-delay: 140ms; }
+  .desktop-now-playing-screen__more-menu--portal > button:nth-of-type(4) { animation-delay: 180ms; }
+  .desktop-now-playing-screen__more-menu--portal > button:nth-of-type(n+5) { animation-delay: 220ms; }
+
+  .desktop-now-playing-screen__more-submenu {
+    animation: np-submenu-in 220ms cubic-bezier(.2, .8, .2, 1) backwards;
+  }
+
+  /* Botão gira ao abrir, como um toggle. */
+  .desktop-now-playing-screen__more svg {
+    transition: transform 260ms cubic-bezier(.3, 1.3, .5, 1);
+  }
+
+  .desktop-now-playing-screen__more[aria-expanded="true"] svg {
+    transform: rotate(90deg);
+  }
+
+  /* ---------- Navbar: desce com mola, conteúdo entra em cascata, pílula respira ---------- */
+  @keyframes np-nav-item {
+    from { opacity: 0; transform: translateY(-10px); }
+    to   { opacity: 1; transform: none; }
+  }
+
+  @keyframes np-handle-hint {
+    0%, 100% { transform: scaleX(1); }
+    50%      { transform: scaleX(1.35); }
+  }
+
+  #root .desktop-layout[data-offline="false"] {
+    transition: grid-template-rows 420ms cubic-bezier(.2, .9, .25, 1);
+  }
+
+  #root .desktop-layout[data-offline="false"] > .desktop-topbar {
+    transition:
+      transform 420ms cubic-bezier(.2, .9, .25, 1.04),
+      box-shadow 420ms ease,
+      border-color 420ms ease;
+  }
+
+  #root .desktop-layout[data-offline="false"] > .desktop-topbar__collapse-toggle {
+    transition: top 420ms cubic-bezier(.2, .9, .25, 1.04);
+  }
+
+  #root .desktop-layout[data-offline="false"][data-topbar-collapsed="false"] > .desktop-topbar > * {
+    animation: np-nav-item 420ms cubic-bezier(.2, .8, .2, 1) backwards;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-topbar-collapsed="false"] > .desktop-topbar > :nth-child(1) { animation-delay: 70ms; }
+  #root .desktop-layout[data-offline="false"][data-topbar-collapsed="false"] > .desktop-topbar > :nth-child(2) { animation-delay: 110ms; }
+  #root .desktop-layout[data-offline="false"][data-topbar-collapsed="false"] > .desktop-topbar > :nth-child(3) { animation-delay: 150ms; }
+  #root .desktop-layout[data-offline="false"][data-topbar-collapsed="false"] > .desktop-topbar > :nth-child(4) { animation-delay: 190ms; }
+  #root .desktop-layout[data-offline="false"][data-topbar-collapsed="false"] > .desktop-topbar > :nth-child(n+5) { animation-delay: 230ms; }
+
+  #root .desktop-layout[data-offline="false"][data-topbar-collapsed="false"] > .desktop-topbar .desktop-nav__item {
+    animation: np-nav-item 380ms cubic-bezier(.2, .8, .2, 1) backwards;
+  }
+
+  #root .desktop-layout[data-offline="false"][data-topbar-collapsed="false"] > .desktop-topbar .desktop-nav__item:nth-child(1) { animation-delay: 110ms; }
+  #root .desktop-layout[data-offline="false"][data-topbar-collapsed="false"] > .desktop-topbar .desktop-nav__item:nth-child(2) { animation-delay: 160ms; }
+  #root .desktop-layout[data-offline="false"][data-topbar-collapsed="false"] > .desktop-topbar .desktop-nav__item:nth-child(3) { animation-delay: 210ms; }
+  #root .desktop-layout[data-offline="false"][data-topbar-collapsed="false"] > .desktop-topbar .desktop-nav__item:nth-child(n+4) { animation-delay: 260ms; }
+
+  /* A pílula pulsa de leve ao recolher, indicando onde reabrir. */
+  #root .desktop-layout[data-offline="false"][data-topbar-collapsed="true"] > .desktop-topbar__collapse-toggle > span {
+    animation: np-handle-hint 2.4s ease-in-out 1.2s 2;
+  }
+}

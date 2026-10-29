@@ -1,5 +1,8 @@
 import type { CSSProperties } from 'react';
 import type { Playlist, RepeatMode, Track } from '@home-music/shared';
+import { useCrossfadeVisualState } from '../crossfade-visual';
+import { useTrackArtworkAccent } from '../track-artwork-accent';
+import { useTrackChangeMotion } from '../use-track-change-motion';
 import { CurrentLyricsLine, LyricsPanel } from './LyricsPanel';
 import { PlayerMobileChrome } from './PlayerMobileChrome';
 import { PlayerPlaybackControls } from './PlayerPlaybackControls';
@@ -8,6 +11,7 @@ import { PlayerTrackPresentation } from './PlayerTrackPresentation';
 
 type PlayerScreenStyle = CSSProperties & {
   '--player-artwork'?: string;
+  '--player-accent'?: string;
 };
 
 type PlayerScreenProps = {
@@ -81,14 +85,20 @@ export function PlayerScreen({
   const coverUrl = !offlineMode && current.hasCover
     ? `/api/tracks/${encodeURIComponent(current.id)}/cover${coverVersion}`
     : null;
-  const immersiveStyle: PlayerScreenStyle | undefined = coverUrl
-    ? { '--player-artwork': `url("${coverUrl}")` }
-    : undefined;
+  const crossfadeVisual = useCrossfadeVisualState();
+  const incomingTrackId = crossfadeVisual?.originTrackId === current.id ? crossfadeVisual.incomingTrack.id : null;
+  const motionKind = useTrackChangeMotion(current.id, incomingTrackId);
+  const accent = useTrackArtworkAccent(offlineMode ? undefined : current);
+  const immersiveStyle: PlayerScreenStyle = {
+    '--player-accent': accent,
+    ...(coverUrl ? { '--player-artwork': `url("${coverUrl}")` } : {})
+  };
 
   return (
     <PlayerMobileChrome
       playing={playing}
       trackId={current.id}
+      motion={motionKind}
       style={immersiveStyle}
       hasArtwork={Boolean(coverUrl)}
     >
