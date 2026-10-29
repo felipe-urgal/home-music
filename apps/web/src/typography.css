@@ -126,18 +126,12 @@ body {
 
   #root .desktop-nav__item span,
   #root .desktop-nav__item--nested span,
-  #root .desktop-context__empty,
-  #root .desktop-context__action,
-  #root .desktop-now-playing__text strong,
-  #root .desktop-queue__header strong,
-  #root .desktop-queue__item strong,
   #root .desktop-library-table__track-copy strong,
   #root .desktop-player-bar__track-text strong {
     font-size: var(--hm-type-secondary);
   }
 
-  #root .desktop-sidebar__footer span,
-  #root .desktop-context__heading span {
+  #root .desktop-sidebar__footer span {
     font-size: var(--hm-type-control);
   }
 
@@ -145,9 +139,6 @@ body {
     font-size: var(--hm-type-micro);
   }
 
-  #root .desktop-context__stats span,
-  #root .desktop-queue__header span,
-  #root .desktop-queue__remaining,
   #root .desktop-player-bar__progress,
   #root .desktop-player-bar__volume span {
     font-size: var(--hm-type-caption);

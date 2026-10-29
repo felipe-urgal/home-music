@@ -352,17 +352,10 @@ export function OfflineApp({ offline, onExit }: OfflineAppProps) {
 
       <DesktopShell
         active={screen === 'player' ? 'player' : 'library'}
-        current={displayCurrent}
-        playing={displayPlaying}
-        currentTime={displayCurrentTime}
         libraryCount={offline.tracks.length}
-        queue={displayQueue}
-        currentIndex={displayCurrentIndex}
         offlineMode
         onOpenPlayer={() => setScreen('player')}
         onOpenLibrary={() => setScreen('library')}
-        onPlayTrack={playTrack}
-        onReorderQueue={tvActive ? () => undefined : player.reorderQueue}
         surfaceClassName={`phone-surface phone-surface--offline ${screen === 'library' ? 'phone-surface--library' : ''}`}
       >
         {offline.loading || (offline.tracks.length > 0 && !player.hydrated) ? (

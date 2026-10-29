@@ -1772,12 +1772,7 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
       <DesktopShell
         active={desktopScreen}
         activeLibraryTab={screen === 'library' ? navigation.libraryTab : undefined}
-        current={current}
-        playing={player.playing}
-        currentTime={player.currentTime}
         libraryCount={library.tracks.length}
-        queue={player.queue}
-        currentIndex={player.currentIndex}
         canRefreshLibrary={desktopLayout && canManageSharedLibrary}
         libraryRefreshing={library.scanning}
         onRefreshLibrary={() => { void refreshLibrary(); }}
@@ -1785,8 +1780,6 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
         onOpenLibrary={() => setScreen('library')}
         onOpenDjMode={desktopLayout ? openDjMode : undefined}
         onOpenLibraryTab={openLibraryTab}
-        onPlayTrack={player.playTrack}
-        onReorderQueue={player.reorderQueue}
         sidebarUtilities={desktopLayout ? (
           <DesktopPlayerSidebarTools
             username={currentUser.username}

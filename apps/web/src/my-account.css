@@ -152,7 +152,6 @@
 
 @media (min-width: 1024px) {
   .desktop-layout[data-desktop-active="account"] { grid-template-columns: 220px minmax(0,1fr); }
-  .desktop-layout[data-desktop-active="account"] .desktop-context { display: none; }
   .desktop-layout[data-desktop-active="account"] .phone-surface { border-right: 0; }
   .desktop-main-content--account { width: 100%; max-width: 1040px; margin: 0 auto; padding: 0 28px; }
   .my-account-screen { max-width: 720px; padding-top: 2px; padding-bottom: 40px; }
