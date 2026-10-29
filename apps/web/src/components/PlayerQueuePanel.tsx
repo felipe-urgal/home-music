@@ -10,6 +10,7 @@ import {
 import { ChevronDown, ChevronRight, ChevronUp, GripHorizontal, GripVertical, ListMusic, X } from 'lucide-react';
 import type { Track } from '@home-music/shared';
 import { playerArtworkTrack } from '../player-presentation';
+import { useTrackArtworkAccent } from '../track-artwork-accent';
 import { Artwork } from './Artwork';
 
 const QUEUE_PAGE_SIZE = 10;
@@ -66,6 +67,7 @@ export function PlayerQueuePanel({ current, queue, currentIndex, offlineMode, on
   const nextTrack = currentIndex >= 0 && currentIndex < queue.length - 1
     ? queue[currentIndex + 1]
     : null;
+  const nextAccent = useTrackArtworkAccent(offlineMode ? undefined : nextTrack ?? undefined);
   const maxSheetHeight = queueSheetMaxHeight();
   const effectiveSheetHeight = Math.min(sheetHeight, maxSheetHeight);
   const sheetStyle: QueueSheetStyle = { '--queue-sheet-height': `${effectiveSheetHeight}px` };
@@ -255,7 +257,9 @@ export function PlayerQueuePanel({ current, queue, currentIndex, offlineMode, on
 
       <button
         type="button"
+        key={nextTrack?.id ?? 'end'}
         className="queue-panel__toggle-mobile"
+        style={{ '--next-accent': nextAccent } as CSSProperties}
         aria-label={nextTrack ? `Tocar próxima música: ${nextTrack.title}` : 'Fim da fila'}
         disabled={!nextTrack}
         onClick={() => {

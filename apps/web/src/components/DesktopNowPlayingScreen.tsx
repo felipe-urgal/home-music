@@ -22,11 +22,11 @@ import {
   Volume2
 } from 'lucide-react';
 import { useCrossfadeVisualState } from '../crossfade-visual';
-import {
-  DEFAULT_ARTWORK_ACCENT,
-  loadArtworkAccent,
-  mixArtworkAccents
-} from '../artwork-accent';
+import { mixArtworkAccents } from '../artwork-accent';
+import { trackCoverUrl, useTrackArtworkAccent } from '../track-artwork-accent';
+import { useTrackChangeMotion } from '../use-track-change-motion';
+import { fetchTrackWaveform } from '../track-waveform-client';
+import { WAVEFORM_BAR_COUNT, waveformBars } from '../waveform-bars';
 import { Artwork } from './Artwork';
 import { CurrentLyricsLine } from './LyricsPanel';
 import {
@@ -42,35 +42,6 @@ function formatTime(value: number) {
   return `${minutes}:${seconds}`;
 }
 
-function trackCoverUrl(track?: Track) {
-  if (!track?.hasCover) return null;
-  const version = track.coverVersion ? `?v=${encodeURIComponent(track.coverVersion)}` : '';
-  return `/api/tracks/${encodeURIComponent(track.id)}/cover${version}`;
-}
-
-function useTrackArtworkAccent(track?: Track) {
-  const coverUrl = trackCoverUrl(track);
-  const [accent, setAccent] = useState(DEFAULT_ARTWORK_ACCENT);
-
-  useEffect(() => {
-    let cancelled = false;
-    setAccent(DEFAULT_ARTWORK_ACCENT);
-    if (!coverUrl) return () => {
-      cancelled = true;
-    };
-
-    void loadArtworkAccent(coverUrl).then(nextAccent => {
-      if (!cancelled && nextAccent) setAccent(nextAccent);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [coverUrl]);
-
-  return accent;
-}
-
 type ImmersiveStyle = CSSProperties & {
   '--now-playing-artwork'?: string;
   '--now-playing-wave-accent'?: string;
@@ -81,15 +52,35 @@ type BackdropStyle = CSSProperties & {
   '--now-playing-backdrop-incoming-opacity'?: string;
 };
 
+type WaveformState =
+  | { trackId: string; status: 'loading'; bars: null }
+  | { trackId: string; status: 'ready'; bars: number[] }
+  | { trackId: string; status: 'fallback'; bars: null };
+
 type WaveStyle = CSSProperties & {
   '--wave-height'?: string;
   '--wave-fill'?: string;
+  '--bar-index'?: number;
+  '--bar-x'?: number;
+};
+
+type WaveformProgressStyle = CSSProperties & {
+  '--wave-hover-x'?: number;
+};
+
+type NextTrackStyle = CSSProperties & {
+  '--next-progress'?: number;
+  '--next-accent'?: string;
 };
 
 const WAVEFORM_HEIGHTS = [
   14, 22, 34, 48, 61, 72, 82, 68, 51, 38, 57, 76, 92, 69, 45, 31, 54, 73, 87, 65,
   50, 34, 24, 18, 30, 42, 55, 46, 36, 27, 21, 16, 12, 9, 7, 5, 4, 3
 ];
+
+const LOADING_WAVEFORM_BARS = Array.from({ length: WAVEFORM_BAR_COUNT }, () => 8);
+const WAVEFORM_PENDING_RETRY_MS = 6_000;
+const WAVEFORM_PENDING_RETRIES = 3;
 
 const DESKTOP_ART_TRANSITION_SECONDS = 0.52;
 const DESKTOP_COPY_TRANSITION_SECONDS = 0.42;
@@ -177,6 +168,34 @@ export function DesktopNowPlayingScreen({
   const activeDesktopCrossfade = crossfadeVisual?.originTrackId === current.id ? crossfadeVisual : null;
   const currentWaveAccent = useTrackArtworkAccent(current);
   const incomingWaveAccent = useTrackArtworkAccent(activeDesktopCrossfade?.incomingTrack);
+  const nextAccent = useTrackArtworkAccent(nextTrack);
+  const [waveform, setWaveform] = useState<WaveformState>({ trackId: current.id, status: 'loading', bars: null });
+  const motionKind = useTrackChangeMotion(current.id, activeDesktopCrossfade?.incomingTrack.id ?? null);
+
+  useEffect(() => {
+    let cancelled = false;
+    let retryTimer: number | undefined;
+
+    function load(attempt: number) {
+      void fetchTrackWaveform(current.id).then(result => {
+        if (cancelled) return;
+        if (result.status === 'ready') {
+          setWaveform({ trackId: current.id, status: 'ready', bars: waveformBars(result.waveform.peaks) });
+          return;
+        }
+        setWaveform({ trackId: current.id, status: 'fallback', bars: null });
+        if (result.status === 'pending' && attempt < WAVEFORM_PENDING_RETRIES) {
+          retryTimer = window.setTimeout(() => load(attempt + 1), WAVEFORM_PENDING_RETRY_MS);
+        }
+      });
+    }
+
+    load(0);
+    return () => {
+      cancelled = true;
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+    };
+  }, [current.id]);
 
   function positionActionsMenu() {
     const trigger = actionsTriggerRef.current;
@@ -275,7 +294,10 @@ export function DesktopNowPlayingScreen({
   }, [current.id]);
   const progress = duration > 0 ? Math.max(0, Math.min(100, (currentTime / duration) * 100)) : 0;
   const quote = quoteForTrack(current);
-  const waveformPosition = (progress / 100) * WAVEFORM_HEIGHTS.length;
+  const waveformSource = waveform.trackId === current.id ? waveform : null;
+  const waveformStatus = waveformSource?.status ?? 'loading';
+  const bars = waveformSource?.bars ?? (waveformStatus === 'fallback' ? WAVEFORM_HEIGHTS : LOADING_WAVEFORM_BARS);
+  const waveformPosition = (progress / 100) * bars.length;
   const repeatLabel = repeatMode === 'one'
     ? 'Repetir uma'
     : repeatMode === 'all'
@@ -319,7 +341,12 @@ export function DesktopNowPlayingScreen({
       style={immersiveStyle}
       data-has-artwork={coverUrl ? 'true' : 'false'}
     >
-      <div className="desktop-now-playing-screen__backdrop" aria-hidden="true">
+      <div
+        className="desktop-now-playing-screen__backdrop"
+        data-motion={motionKind}
+        data-playing={playing ? 'true' : 'false'}
+        aria-hidden="true"
+      >
         {incomingBackdropStyle && (
           <div
             className="desktop-now-playing-screen__backdrop-incoming"
@@ -330,7 +357,7 @@ export function DesktopNowPlayingScreen({
 
       <div className="desktop-now-playing-screen__stage">
         <div className="desktop-now-playing-screen__art">
-          <div className="desktop-now-playing-screen__art-frame">
+          <div className="desktop-now-playing-screen__art-frame" data-motion={motionKind}>
             <NowPlayingCrossfadeVinyl
               current={current}
               crossfade={crossfadeVisual}
@@ -352,7 +379,7 @@ export function DesktopNowPlayingScreen({
         </div>
 
         <div className="desktop-now-playing-screen__content">
-          <div className="desktop-now-playing-screen__identity-row">
+          <div className="desktop-now-playing-screen__identity-row" data-motion={motionKind}>
             <div className="desktop-now-playing-screen__heading">
               <NowPlayingCrossfadeIdentity
                 current={current}
@@ -481,6 +508,7 @@ export function DesktopNowPlayingScreen({
 
           <div
             className="desktop-now-playing-screen__waveform-progress"
+            style={{ '--wave-hover-x': waveformHover ? waveformHover.leftPercent / 100 : -1 } as WaveformProgressStyle}
             onPointerMove={event => {
               if (event.pointerType === 'touch' || duration <= 0) return;
               const rect = event.currentTarget.getBoundingClientRect();
@@ -502,15 +530,22 @@ export function DesktopNowPlayingScreen({
                 {formatTime(waveformHover.time)}
               </span>
             )}
-            <div className="desktop-now-playing-screen__waveform" aria-hidden="true">
-              {WAVEFORM_HEIGHTS.map((height, index) => {
+            <div
+              key={`${current.id}:${waveformStatus}`}
+              className="desktop-now-playing-screen__waveform"
+              data-status={waveformStatus}
+              aria-hidden="true"
+            >
+              {bars.map((height, index) => {
                 const fill = Math.max(0, Math.min(100, (waveformPosition - index) * 100));
                 return (
                   <span
                     key={index}
                     style={{
                       '--wave-height': `${height}%`,
-                      '--wave-fill': `${fill}%`
+                      '--wave-fill': `${fill}%`,
+                      '--bar-index': index,
+                      '--bar-x': (index + 0.5) / bars.length
                     } as WaveStyle}
                   />
                 );
@@ -566,7 +601,9 @@ export function DesktopNowPlayingScreen({
       </div>
       {nextTrack && nextTrack.id !== current.id && (
         <button
+          key={nextTrack.id}
           className="desktop-now-playing-screen__next-track"
+          style={{ '--next-progress': progress / 100, '--next-accent': nextAccent } as NextTrackStyle}
           type="button"
           aria-label={`Tocar próxima: ${nextTrack.title}`}
           onClick={onNext}
