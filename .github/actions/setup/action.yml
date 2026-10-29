@@ -1,0 +1,16 @@
+name: Setup
+description: Node.js e dependências do workspace
+
+runs:
+  using: composite
+  steps:
+    - name: Node.js
+      uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      with:
+        node-version: 22
+        cache: npm
+        package-manager-cache: false
+
+    - name: Dependencies
+      shell: bash
+      run: npm ci --no-audit --no-fund

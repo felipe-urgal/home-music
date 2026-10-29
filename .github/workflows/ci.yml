@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 jobs:
-  validate:
+  typecheck:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -22,18 +22,66 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Node.js
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+      - uses: ./.github/actions/setup
+
+      - name: Typecheck
+        run: npm run typecheck
+
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: 22
-          cache: npm
-          package-manager-cache: false
+          persist-credentials: false
 
-      - name: Dependencies
-        run: npm ci --no-audit --no-fund
+      - uses: ./.github/actions/setup
 
-      - name: Check (types, unit tests, build)
-        run: npm run check
+      - name: Unit tests
+        run: npm run test -w @home-music/web
+
+      - name: Build
+        run: npm run build
+
+  server:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1/3, 2/3, 3/3]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+
+      - name: Shared build
+        run: npm run build -w @home-music/shared
+
+      - name: Unit tests (shard ${{ matrix.shard }})
+        working-directory: apps/server
+        run: npx tsx --test --test-shard=${{ matrix.shard }} src/*.test.ts
+
+  quick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+
+      - name: Shared build
+        run: npm run build -w @home-music/shared
+
+      - name: Production verifier tests
+        run: node --test scripts/verify-production.test.mjs
 
       - name: Backup/restore smoke (temporary SQLite)
         run: npm run smoke:backup-restore
@@ -61,7 +109,8 @@ jobs:
           - name: offline-mobile
             specs: tests/offline-collections-critical.spec.ts
             projects: --project=mobile-chromium
-          - name: admin
+          - name: admin 1/2
+            shard: --shard=1/2
             specs: >-
               tests/admin-import-critical-pipeline.spec.ts tests/admin-operation-history.spec.ts
               tests/admin-file-move.spec.ts tests/admin-users-credential.spec.ts
@@ -69,26 +118,37 @@ jobs:
               tests/admin-library-assistant.spec.ts tests/multi-user.spec.ts
             projects: --project=desktop-chromium
             assistant: '1'
-          - name: account
+          - name: admin 2/2
+            shard: --shard=2/2
+            specs: >-
+              tests/admin-import-critical-pipeline.spec.ts tests/admin-operation-history.spec.ts
+              tests/admin-file-move.spec.ts tests/admin-users-credential.spec.ts
+              tests/admin-assistant-race.spec.ts tests/media-quarantine.spec.ts
+              tests/admin-library-assistant.spec.ts tests/multi-user.spec.ts
+            projects: --project=desktop-chromium
+            assistant: '1'
+          - name: account desktop
             specs: >-
               tests/account-security.spec.ts tests/account-navigation.spec.ts
               tests/auth-session-race.spec.ts tests/password-ux.spec.ts
-            projects: --project=desktop-chromium --project=mobile-chromium --project=tablet-chromium
+            projects: --project=desktop-chromium
+          - name: account mobile
+            specs: >-
+              tests/account-security.spec.ts tests/account-navigation.spec.ts
+              tests/auth-session-race.spec.ts tests/password-ux.spec.ts
+            projects: --project=mobile-chromium
+          - name: account tablet
+            specs: >-
+              tests/account-security.spec.ts tests/account-navigation.spec.ts
+              tests/auth-session-race.spec.ts tests/password-ux.spec.ts
+            projects: --project=tablet-chromium
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Node.js
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 22
-          cache: npm
-          package-manager-cache: false
-
-      - name: Dependencies
-        run: npm ci --no-audit --no-fund
+      - uses: ./.github/actions/setup
 
       - name: Build
         run: npm run build
@@ -114,4 +174,4 @@ jobs:
       - name: E2E
         env:
           HOME_MUSIC_E2E_LIBRARY_ASSISTANT: ${{ matrix.assistant || '' }}
-        run: npm --prefix e2e test -- ${{ matrix.specs }} ${{ matrix.projects }}
+        run: npm --prefix e2e test -- ${{ matrix.specs }} ${{ matrix.projects }} ${{ matrix.shard }}
