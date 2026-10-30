@@ -95,12 +95,13 @@ export function parseAppPath(pathname: string): AppRoute {
     };
   }
 
+  // Pastas e playlists compartilham a raiz da biblioteca; a rota antiga redireciona para ela.
   if (canonical === '/library/playlists') {
     return {
       screen: 'library',
-      path: '/library/playlists',
+      path: '/library',
       valid: true,
-      library: { libraryTab: 'playlists', folderPath: '', selectedPlaylistId: null }
+      library: { libraryTab: 'folders', folderPath: '', selectedPlaylistId: null }
     };
   }
 
@@ -128,10 +129,8 @@ export function routeForAccess(route: AppRoute, canAccessAdmin: boolean): AppRou
 }
 
 export function libraryPathForState(state: LibraryRouteState) {
-  if (state.libraryTab === 'playlists') {
-    return state.selectedPlaylistId
-      ? `/library/playlists/${encodeURIComponent(state.selectedPlaylistId)}`
-      : '/library/playlists';
+  if (state.libraryTab === 'playlists' && state.selectedPlaylistId) {
+    return `/library/playlists/${encodeURIComponent(state.selectedPlaylistId)}`;
   }
 
   const folderPath = state.folderPath.replace(/^\/+|\/+$/g, '');

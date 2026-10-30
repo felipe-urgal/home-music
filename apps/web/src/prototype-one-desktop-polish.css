@@ -1419,7 +1419,8 @@
     gap: 20px 16px;
   }
 
-  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .folder-visual-card__artwork-mosaic {
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .folder-visual-card__artwork-mosaic,
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .folder-visual-card__artwork-mosaic {
     width: 100%;
     aspect-ratio: 1.36 / 1;
     display: grid;
@@ -1429,22 +1430,27 @@
     background: #0d1522;
   }
 
-  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .folder-visual-card__artwork-mosaic.is-count-1 {
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .folder-visual-card__artwork-mosaic.is-count-1,
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .folder-visual-card__artwork-mosaic.is-count-1 {
     grid-template-columns: 1fr;
     grid-template-rows: 1fr;
   }
 
-  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .folder-visual-card__artwork-mosaic.is-count-2 {
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .folder-visual-card__artwork-mosaic.is-count-2,
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .folder-visual-card__artwork-mosaic.is-count-2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-template-rows: 1fr;
   }
 
-  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .folder-visual-card__artwork-mosaic.is-count-3 > .artwork:last-child {
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .folder-visual-card__artwork-mosaic.is-count-3 > .artwork:last-child,
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .folder-visual-card__artwork-mosaic.is-count-3 > .artwork:last-child {
     grid-column: 1 / -1;
   }
 
   #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .folder-visual-card__artwork-mosaic > .artwork,
-  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .folder-visual-card__artwork-mosaic > .artwork img {
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .folder-visual-card__artwork-mosaic > .artwork,
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .folder-visual-card__artwork-mosaic > .artwork img,
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .folder-visual-card__artwork-mosaic > .artwork img {
     width: 100%;
     height: 100%;
     max-width: none;
@@ -1456,7 +1462,8 @@
     box-shadow: none;
   }
 
-  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .folder-visual-card__artwork-mosaic > .artwork {
+  #root .desktop-layout[data-offline="false"][data-library-tab="folders"]:has(.library-header.is-root) .folder-visual-card__artwork-mosaic > .artwork,
+  #root .desktop-layout[data-offline="false"][data-library-tab="playlists"]:has(.library-header.is-root) .folder-visual-card__artwork-mosaic > .artwork {
     overflow: hidden;
     border-right: 1px solid rgba(9,14,23,.72);
     border-bottom: 1px solid rgba(9,14,23,.72);

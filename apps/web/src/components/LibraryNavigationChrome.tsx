@@ -1,10 +1,5 @@
-import { ChevronLeft, ChevronRight, Folder, ListMusic, MoreVertical, Music2, RefreshCw } from 'lucide-react';
-import type { LibraryNavigation, LibraryTab } from '../useLibraryNavigation';
-
-const tabs: Array<{ id: LibraryTab; label: string; icon: typeof Folder }> = [
-  { id: 'folders', label: 'Pastas', icon: Folder },
-  { id: 'playlists', label: 'Playlists', icon: ListMusic }
-];
+import { ChevronLeft, ChevronRight, MoreVertical, Music2, RefreshCw } from 'lucide-react';
+import type { LibraryNavigation } from '../useLibraryNavigation';
 
 type LibraryNavigationChromeProps = {
   navigation: LibraryNavigation;
@@ -14,7 +9,6 @@ type LibraryNavigationChromeProps = {
   canManageSharedLibrary: boolean;
   scanning: boolean;
   onBack: () => void;
-  onChangeTab: (tab: LibraryTab) => void;
   onScan: () => void;
   onOpenPlayer: () => void;
   detailMenuOpen?: boolean;
@@ -29,7 +23,6 @@ export function LibraryNavigationChrome({
   canManageSharedLibrary,
   scanning,
   onBack,
-  onChangeTab,
   onScan,
   onOpenPlayer,
   detailMenuOpen = false,
@@ -81,26 +74,6 @@ export function LibraryNavigationChrome({
           {folderView.breadcrumbs.map(crumb => (
             <span key={crumb.path}><ChevronRight aria-hidden="true" /><button type="button" onClick={() => enterFolder(crumb.path)}>{crumb.name}</button></span>
           ))}
-        </nav>
-      )}
-
-      {!isDetail && (
-        <nav className="library-tabs" aria-label="Navegação da biblioteca">
-          {tabs.map(tab => {
-            const Icon = tab.icon;
-            const active = libraryTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                className={active ? 'is-active' : ''}
-                aria-current={active ? 'page' : undefined}
-                onClick={() => onChangeTab(tab.id)}
-              >
-                <Icon aria-hidden="true" />{tab.label}
-              </button>
-            );
-          })}
         </nav>
       )}
     </>

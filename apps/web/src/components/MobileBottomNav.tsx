@@ -1,31 +1,26 @@
-import { AudioLines, Folder, ListMusic, Music2, Search, UserRound } from 'lucide-react';
+import { AudioLines, Library, Music2, Search, UserRound } from 'lucide-react';
 import { navigateAppPath } from '../browser-navigation';
-import type { LibraryTab } from '../useLibraryNavigation';
 
 type MobileBottomNavProps = {
   active: 'player' | 'library' | 'account';
-  libraryTab?: LibraryTab;
   username?: string;
   onOpenPlayer: () => void;
   onOpenLibrary: () => void;
   onOpenFolders?: () => void;
-  onOpenPlaylists?: () => void;
   onOpenAccount: () => void;
 };
 
 export function MobileBottomNav({
   active,
-  libraryTab,
   username,
   onOpenPlayer,
   onOpenLibrary,
   onOpenFolders,
-  onOpenPlaylists,
   onOpenAccount
 }: MobileBottomNavProps) {
   const accountInitial = username?.trim().charAt(0).toUpperCase() || 'U';
 
-  function openLibraryRoute(path: '/library' | '/library/playlists', action?: () => void) {
+  function openLibraryRoute(path: '/library', action?: () => void) {
     if (action) {
       action();
       return;
@@ -44,8 +39,7 @@ export function MobileBottomNav({
 
   if (active === 'player') return null;
 
-  const foldersActive = active === 'library' && libraryTab !== 'playlists';
-  const playlistsActive = active === 'library' && libraryTab === 'playlists';
+  const libraryActive = active === 'library';
 
   return (
     <>
@@ -70,13 +64,9 @@ export function MobileBottomNav({
           <Music2 aria-hidden="true" />
           <span>Tocando Agora</span>
         </button>
-        <button className={foldersActive ? 'is-active' : ''} type="button" aria-current={foldersActive ? 'page' : undefined} onClick={() => openLibraryRoute('/library', onOpenFolders)}>
-          <Folder aria-hidden="true" />
-          <span>Pastas</span>
-        </button>
-        <button className={playlistsActive ? 'is-active' : ''} type="button" aria-current={playlistsActive ? 'page' : undefined} onClick={() => openLibraryRoute('/library/playlists', onOpenPlaylists)}>
-          <ListMusic aria-hidden="true" />
-          <span>Playlists</span>
+        <button className={libraryActive ? 'is-active' : ''} type="button" aria-current={libraryActive ? 'page' : undefined} onClick={() => openLibraryRoute('/library', onOpenFolders)}>
+          <Library aria-hidden="true" />
+          <span>Biblioteca</span>
         </button>
       </nav>
     </>

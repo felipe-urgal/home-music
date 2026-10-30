@@ -20,9 +20,9 @@ describe('browser navigation routes', () => {
     });
     expect(parseAppPath('/library/playlists/')).toMatchObject({
       screen: 'library',
-      path: '/library/playlists',
+      path: '/library',
       valid: true,
-      library: { libraryTab: 'playlists', selectedPlaylistId: null }
+      library: { libraryTab: 'folders', folderPath: '', selectedPlaylistId: null }
     });
     expect(parseAppPath('/dj/')).toMatchObject({ screen: 'dj', path: '/dj', valid: true });
     expect(parseAppPath('/account/')).toMatchObject({ screen: 'account', path: '/account', valid: true });

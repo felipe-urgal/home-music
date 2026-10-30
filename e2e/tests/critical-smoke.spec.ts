@@ -80,20 +80,13 @@ async function expectAccessibilityBaseline(page: Page) {
     return;
   }
 
-  const libraryTabs = page.locator('.library-tabs');
-  await expect(
-    libraryTabs,
-    'as abas da Biblioteca devem estar visíveis em mobile/tablet'
-  ).toBeVisible();
-  const foldersTab = libraryTabs.getByRole('button', { name: 'Pastas', exact: true });
-  await expect(
-    foldersTab,
-    'a aba Pastas deve estar visível na rota raiz da Biblioteca'
-  ).toBeVisible();
-  await expect(
-    foldersTab,
-    'a rota /library deve expor Pastas como página corrente'
-  ).toHaveAttribute('aria-current', 'page');
+  await expect(page.locator('.library-content')).toBeVisible();
+  if (width < 700) {
+    const libraryButton = page
+      .getByRole('navigation', { name: 'Navegação principal' })
+      .getByRole('button', { name: 'Biblioteca', exact: true });
+    await expect(libraryButton, 'a rota /library deve expor Biblioteca como página corrente').toHaveAttribute('aria-current', 'page');
+  }
 }
 
 async function openAccount(page: Page) {
@@ -164,12 +157,9 @@ test('smoke crítico: deep link, acessibilidade, histórico, player, conta e adm
   await expect(page.locator('#administration-title')).toHaveText('Administração');
 
   await page.goto('/library/playlists/playlist-inexistente');
-  await expect(page).toHaveURL(/\/library\/playlists$/);
-  // O título editorial é ocultado no desktop; a raiz de playlists também
-  // não apresenta a busca. Valide a tela carregada, não controles ausentes.
-  await expect(page.locator('.desktop-layout')).toHaveAttribute('data-library-tab', 'playlists');
+  await expect(page).toHaveURL(/\/library$/);
+  await expect(page.locator('.desktop-layout')).toHaveAttribute('data-library-tab', 'folders');
   await expect(page.locator('.library-content')).toBeVisible();
-  await expect(page.locator('.section-heading--playlists-root')).toHaveCount(1);
 
   await page.goto('/rota-invalida');
   await expect(page).toHaveURL(/\/$/);

@@ -219,13 +219,14 @@ export function useLibraryNavigation(
       || selectedPlaylist
     ) return;
 
+    setLibraryTab('folders');
     setSelectedPlaylistId(null);
     setQuery('');
     setSort('current');
     setFormatFilter('all');
     setCoverFilter('all');
     setVisibleCount(LIBRARY_PAGE_SIZE);
-    navigateAppPath('/library/playlists', { replace: true });
+    navigateAppPath('/library', { replace: true });
   }, [libraryReady, libraryTab, selectedPlaylist, selectedPlaylistId]);
 
   function resetPage() {
@@ -279,9 +280,10 @@ export function useLibraryNavigation(
   }
 
   function leavePlaylist() {
+    setLibraryTab('folders');
     setSelectedPlaylistId(null);
     resetNavigationView();
-    navigateAppPath(libraryPathForState({ libraryTab: 'playlists', folderPath: '', selectedPlaylistId: null }));
+    navigateAppPath(libraryPathForState({ libraryTab: 'folders', folderPath: '', selectedPlaylistId: null }));
   }
 
   function changeQuery(value: string) {

@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
-import { ChevronRight, Folder, MoreHorizontal, Play, Plus, Sparkles } from 'lucide-react';
+import { ChevronRight, Folder, LayoutGrid, List, MoreHorizontal, Play, Plus, Sparkles } from 'lucide-react';
+import { m } from 'motion/react';
 import type { Playlist, Track } from '@home-music/shared';
 import { LIBRARY_PAGE_SIZE, type LibraryNavigation } from '../useLibraryNavigation';
 import { useDesktopLayout } from '../useDesktopLayout';
 import { Artwork } from './Artwork';
 import { LibraryTrackRows, type LibraryTrackOfflineProps } from './LibraryTrackRows';
+import { LibraryMotion, cardEntrance, cardInteraction } from './library-motion';
 
 type LibraryContentProps = {
   navigation: LibraryNavigation;
@@ -24,6 +26,17 @@ type LibraryContentProps = {
 };
 
 type PlaylistOrder = 'recent' | 'name';
+type TrackView = 'grid' | 'table';
+
+const TRACK_VIEW_STORAGE_KEY = 'home-music:folder-track-view';
+
+function readTrackView(): TrackView {
+  try {
+    return window.localStorage.getItem(TRACK_VIEW_STORAGE_KEY) === 'table' ? 'table' : 'grid';
+  } catch {
+    return 'grid';
+  }
+}
 
 function formatPlaylistDate(value: string) {
   const date = new Date(value);
@@ -66,7 +79,16 @@ export function LibraryContent({
   } = navigation;
   const desktopLayout = useDesktopLayout();
   const [playlistOrder, setPlaylistOrder] = useState<PlaylistOrder>('recent');
+  const [trackView, setTrackView] = useState<TrackView>(readTrackView);
   const folderSort = sort === 'title-desc' ? 'title-desc' : 'title-asc';
+  function changeTrackView(view: TrackView) {
+    setTrackView(view);
+    try {
+      window.localStorage.setItem(TRACK_VIEW_STORAGE_KEY, view);
+    } catch {
+      // Preferência é opcional; segue sem persistir.
+    }
+  }
   const run = (operation: Promise<unknown>) => void operation.catch(() => undefined);
   const tracksById = useMemo(() => new Map(tracks.map(track => [track.id, track])), [tracks]);
   const orderedPlaylists = useMemo(() => {
@@ -79,7 +101,7 @@ export function LibraryContent({
   }, [playlistOrder, playlists]);
 
   function renderPlaylistCards(items: Playlist[] = orderedPlaylists, useArtworkMosaic = desktopLayout) {
-    return items.map(playlist => {
+    return items.map((playlist, index) => {
       const contextTracks = playlist.trackIds
         .map(trackId => tracksById.get(trackId))
         .filter((track): track is Track => Boolean(track));
@@ -91,7 +113,7 @@ export function LibraryContent({
       const updatedAt = formatPlaylistDate(playlist.updatedAt);
 
       return (
-        <div className="group-item playlist-visual-card library-collection-card" key={playlist.id}>
+        <m.div className="group-item playlist-visual-card library-collection-card" key={playlist.id} {...cardEntrance(index)} {...cardInteraction}>
           <button className="group-item__main playlist-visual-card__main" type="button" onClick={() => selectPlaylist(playlist.id)}>
             {useArtworkMosaic && playlistArtworkTracks.length ? (
               <span
@@ -124,7 +146,7 @@ export function LibraryContent({
           </button>
           <MoreHorizontal className="group-item__more" aria-hidden="true" />
           <ChevronRight className="group-item__chevron" aria-hidden="true" />
-        </div>
+        </m.div>
       );
     });
   }
@@ -140,6 +162,7 @@ export function LibraryContent({
   const mobileLibraryHome = !desktopLayout && libraryTab === 'folders' && !folderPath && !query;
 
   return (
+    <LibraryMotion>
     <section className="library-content">
       {mobileLibraryHome ? (
         <div className="mobile-library-home" data-testid="mobile-library-home">
@@ -214,13 +237,15 @@ export function LibraryContent({
                 )}
               </div>
               <div className={`folder-visual-grid ${desktopLayout && !folderPath && !query ? 'library-collection-grid' : ''}`}>
-                {pagedFolders.map(folder => (
-                  <button
+                {pagedFolders.map((folder, index) => (
+                  <m.button
                     className="folder-visual-card library-collection-card"
                     key={folder.path}
                     type="button"
                     aria-label={`Abrir ${folder.name}, ${folder.matchingTrackCount} músicas`}
                     onClick={() => enterFolder(folder.path)}
+                    {...cardEntrance(index)}
+                    {...cardInteraction}
                   >
                     <span className="folder-visual-card__mobile-icon" aria-hidden="true"><Folder /></span>
                     {desktopLayout ? (
@@ -238,7 +263,7 @@ export function LibraryContent({
                     </span>
                     <MoreHorizontal className="folder-visual-card__more" aria-hidden="true" />
                     <ChevronRight className="folder-visual-card__chevron" aria-hidden="true" />
-                  </button>
+                  </m.button>
                 ))}
                 {desktopLayout && !folderPath && !query && renderPlaylistCards()}
               </div>
@@ -248,6 +273,12 @@ export function LibraryContent({
           {pagedTracks.length > 0 && (
             <>
               <div className="section-heading"><span>{query ? 'Resultados' : 'Músicas nesta pasta'}</span><small>{libraryTracks.length}</small></div>
+              {desktopLayout && (
+                <div className="track-view-toggle" role="group" aria-label="Modo de exibição das músicas">
+                  <button type="button" aria-label="Exibir em grade" aria-pressed={trackView === 'grid'} onClick={() => changeTrackView('grid')}><LayoutGrid aria-hidden="true" /></button>
+                  <button type="button" aria-label="Exibir em lista" aria-pressed={trackView === 'table'} onClick={() => changeTrackView('table')}><List aria-hidden="true" /></button>
+                </div>
+              )}
               <LibraryTrackRows
                 tracks={pagedTracks}
                 context={folderContextTracks}
@@ -257,7 +288,7 @@ export function LibraryContent({
                 onSort={changeSort}
                 onPlayTrack={onPlayTrack}
                 onTogglePlay={onTogglePlay}
-                desktopVariant={folderPath || query ? 'grid' : 'table'}
+                desktopVariant={folderPath || query ? trackView : 'table'}
                 {...offlineTrackProps}
               />
             </>
@@ -331,5 +362,6 @@ export function LibraryContent({
         </>
       ) : null}
     </section>
+    </LibraryMotion>
   );
 }

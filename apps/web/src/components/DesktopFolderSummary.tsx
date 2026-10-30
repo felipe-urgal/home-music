@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react';
 import { Clock, Download, Image, Pause, Play, Music2 } from 'lucide-react';
 import type { Track } from '@home-music/shared';
+import { m } from 'motion/react';
 import { Artwork } from './Artwork';
+import { LibraryMotion, cardEntrance } from './library-motion';
 
 type DesktopFolderSummaryProps = {
   name: string;
@@ -44,9 +46,12 @@ export function DesktopFolderSummary({
   const withCoverCount = tracks.reduce((count, track) => count + (track.hasCover ? 1 : 0), 0);
 
   return (
-    <aside className="desktop-folder-summary" data-testid="desktop-folder-summary" aria-label={`Resumo da pasta ${name}`}>
-      <button
+    <LibraryMotion>
+    <m.aside className="desktop-folder-summary" data-testid="desktop-folder-summary" aria-label={`Resumo da pasta ${name}`} initial={{ opacity: 0, x: -14 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}>
+      <m.button
         className="desktop-folder-summary__cover"
+        whileHover={{ scale: 1.03 }}
+        whileTap={{ scale: 0.97 }}
         type="button"
         aria-label={playing ? 'Pausar pasta' : 'Tocar pasta'}
         disabled={!tracks.length}
@@ -56,7 +61,7 @@ export function DesktopFolderSummary({
         <span className="desktop-folder-summary__cover-play" aria-hidden="true">
           {playing ? <Pause /> : <Play />}
         </span>
-      </button>
+      </m.button>
 
       <div className="desktop-folder-summary__identity">
         <span className="desktop-folder-summary__identity-icon" aria-hidden="true"><Music2 /></span>
@@ -67,22 +72,22 @@ export function DesktopFolderSummary({
       </div>
 
       <dl className="desktop-folder-summary__stats">
-        <div>
+        <m.div {...cardEntrance(1)}>
           <dt><Clock aria-hidden="true" /><span>Duração total</span></dt>
           <dd>{formatTotalDuration(tracks)}</dd>
-        </div>
-        <div>
+        </m.div>
+        <m.div {...cardEntrance(2)}>
           <dt><Download aria-hidden="true" /><span>Disponível offline</span></dt>
           <dd>{offlineCount} de {tracks.length}</dd>
-        </div>
-        <div>
+        </m.div>
+        <m.div {...cardEntrance(3)}>
           <dt><Music2 aria-hidden="true" /><span>Formato predominante</span></dt>
           <dd>{predominantFormat(tracks)}</dd>
-        </div>
-        <div>
+        </m.div>
+        <m.div {...cardEntrance(4)}>
           <dt><Image aria-hidden="true" /><span>Com capa</span></dt>
           <dd>{withCoverCount} de {tracks.length}</dd>
-        </div>
+        </m.div>
       </dl>
 
       {offlineControl && <div className="desktop-folder-summary__offline-action">{offlineControl}</div>}
@@ -92,6 +97,7 @@ export function DesktopFolderSummary({
         <strong>torna tudo</strong>
         <strong>mais leve.</strong>
       </div>
-    </aside>
+    </m.aside>
+    </LibraryMotion>
   );
 }
