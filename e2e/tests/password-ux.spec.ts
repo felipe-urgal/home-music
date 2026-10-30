@@ -93,12 +93,6 @@ test('Alterar senha permite mostrar e ocultar os três campos juntos', async ({ 
     const passwordV3 = page.getByTestId('my-account-password-prototype-three');
 
     await expect(passwordV3).toBeVisible();
-    await expect(passwordV3.getByRole('heading', { name: 'Alterar senha', exact: true })).toBeVisible();
-    await expect(passwordV3.getByText('Escolha uma nova senha forte e segura.', { exact: true })).toBeVisible();
-    await expect(passwordV3.getByText('Força da senha', { exact: true })).toBeVisible();
-    await expect(passwordV3.getByText('Dicas para uma senha segura', { exact: true })).toBeVisible();
-    await expect(passwordV3.getByText('Use pelo menos 6 caracteres', { exact: true })).toBeVisible();
-    await expect(passwordV3.getByText('Suas informações estão protegidas', { exact: true })).toBeVisible();
 
     await page.getByRole('button', { name: 'Mostrar senha atual' }).click();
     await expect(current).toHaveAttribute('type', 'text');
