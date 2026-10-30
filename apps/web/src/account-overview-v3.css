@@ -285,6 +285,9 @@
     height: 330px;
     pointer-events: none;
     background: url('/account-v3-headphones.webp') right top / 384px 330px no-repeat;
+    /* A arte traz uma borda de card embutida à esquerda; o gradiente a dissolve no fundo. */
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 34%);
+    mask-image: linear-gradient(90deg, transparent 0, #000 34%);
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-v3__settings {
@@ -342,20 +345,37 @@
     background: #d9a156;
   }
 
-  #root .desktop-layout[data-offline="false"] .my-account-v3__grid {
+  #root .desktop-layout[data-offline="false"] .my-account-v3__groups {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 14px;
+    gap: 22px;
   }
 
-  #root .desktop-layout[data-offline="false"] .my-account-v3__bottom-grid {
+  #root .desktop-layout[data-offline="false"] .my-account-v3__group {
+    display: grid;
+    gap: 10px;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-v3__group-label {
+    margin: 0 0 0 4px;
+    color: #8190a7;
+    font-size: 10px;
+    font-weight: 680;
+    letter-spacing: .32em;
+    text-transform: uppercase;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-v3__grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 14px;
   }
 
-  #root .desktop-layout[data-offline="false"] .my-account-v3__bottom-grid > :only-child {
+  #root .desktop-layout[data-offline="false"] .my-account-v3__grid > :only-child {
     grid-column: 1 / -1;
+  }
+
+  #root .desktop-layout[data-offline="false"] .my-account-v3__grid--preferences {
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-v3__card {

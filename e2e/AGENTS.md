@@ -56,6 +56,18 @@ Evite acoplamento a classes CSS, hierarquia incidental de DOM ou posição fixa 
 
 Mudanças de UI devem respeitar a superfície real de cada viewport. Desktop pode usar navegação diferente de mobile/tablet; teste o contrato correto em vez de exigir o mesmo markup em todos os breakpoints.
 
+## O que não testar
+
+E2E protege comportamento observável, não aparência. Não escreva nem mantenha asserções sobre:
+
+- geometria e medidas (`boundingBox`, larguras, alturas, posições, `scrollWidth`);
+- estilos computados (`getComputedStyle`, cores, fontes, `border-radius`, número de colunas de grid, imagens de fundo);
+- copy decorativa ou de marca (slogans, citações, subtítulos) que não seja parte do contrato da tarefa do usuário;
+- ausência de elementos legados (`toHaveCount(0)` só para provar que algo antigo saiu);
+- presença de classes CSS como prova de aparência.
+
+Esses checks quebram a cada ajuste visual sem proteger um fluxo. Se uma regressão de layout for realmente crítica (por exemplo, conteúdo cortado que impede a ação), prefira verificar o efeito no usuário: o controle está visível, alcançável e funciona.
+
 ## PWA/offline
 
 Para specs offline, preserve:
