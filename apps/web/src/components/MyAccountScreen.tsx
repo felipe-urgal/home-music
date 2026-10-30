@@ -320,8 +320,11 @@ export function MyAccountScreen({
                 <i />
               </span>
 
-              <div className="my-account-v3__grid">
-                <m.button className="my-account-v3__card is-amber" type="button"
+              <div className="my-account-v3__groups">
+                <section className="my-account-v3__group" aria-labelledby="my-account-v3-group-security">
+                  <h3 className="my-account-v3__group-label" id="my-account-v3-group-security">Segurança</h3>
+                  <div className="my-account-v3__grid">
+                    <m.button className="my-account-v3__card is-amber" type="button"
                   {...cardMotion(2)}
                   onClick={() => setView('password')}>
                   <span className="my-account-v3__card-icon"><KeyRound /></span>
@@ -342,8 +345,13 @@ export function MyAccountScreen({
                   </span>
                   <ChevronRight />
                 </m.button>
+                  </div>
+                </section>
 
-                {playbackPreferences ? (
+                <section className="my-account-v3__group" aria-labelledby="my-account-v3-group-preferences">
+                  <h3 className="my-account-v3__group-label" id="my-account-v3-group-preferences">Preferências</h3>
+                  <div className="my-account-v3__grid my-account-v3__grid--preferences">
+                    {playbackPreferences && (
                   <m.button className="my-account-v3__card is-pink" type="button"
                   {...cardMotion(4)}
                   onClick={() => setView('playback')}>
@@ -354,7 +362,7 @@ export function MyAccountScreen({
                     </span>
                     <ChevronRight />
                   </m.button>
-                ) : <span className="my-account-v3__card-spacer" aria-hidden="true" />}
+                )}
 
                 <m.button className="my-account-v3__card is-blue" type="button"
                   {...cardMotion(5)}
@@ -375,7 +383,7 @@ export function MyAccountScreen({
                   <ChevronRight />
                 </m.button>
 
-                {offlineMode ? (
+                {offlineMode && (
                   <m.button
                     className="my-account-v3__card is-cyan"
                     type="button"
@@ -391,10 +399,14 @@ export function MyAccountScreen({
                     </span>
                     <ChevronRight />
                   </m.button>
-                ) : <span className="my-account-v3__card-spacer" aria-hidden="true" />}
-              </div>
+                )}
+                  </div>
+                </section>
 
-              <div className="my-account-v3__bottom-grid">
+                <section className="my-account-v3__group" aria-labelledby="my-account-v3-group-system">
+                  <h3 className="my-account-v3__group-label" id="my-account-v3-group-system">Sistema</h3>
+                  <div className="my-account-v3__grid">
+                    
                 {currentUser.role === 'admin' && (
                   <m.button className="my-account-v3__card my-account-v3__card--wide is-indigo" type="button"
                   {...cardMotion(8)}
@@ -424,6 +436,9 @@ export function MyAccountScreen({
                   </span>
                   <ChevronRight />
                 </m.button>
+              
+                  </div>
+                </section>
               </div>
 
               <footer className="my-account-v3__footer" aria-hidden="true">
@@ -434,8 +449,7 @@ export function MyAccountScreen({
           </div>
 
           <div className="my-account-overview my-account-overview--legacy">
-          <button
-            className="my-account-profile my-account-profile--link"
+          <m.button {...cardEntrance(0)} className="my-account-profile my-account-profile--link"
             type="button"
             onClick={() => setView('profile')}
             aria-label={`Abrir perfil de ${currentUser.username}`}
@@ -449,9 +463,9 @@ export function MyAccountScreen({
               <span className="my-account-profile__badge"><ShieldCheck /> Sessão ativa</span>
               <ChevronRight className="my-account-profile__open" />
             </span>
-          </button>
+          </m.button>
 
-          <section className="my-account-link-group" aria-labelledby="my-account-group-account">
+          <m.section {...cardEntrance(1)} className="my-account-link-group" aria-labelledby="my-account-group-account">
             <span className="my-account-link-group__label" id="my-account-group-account">Conta</span>
             <div className="my-account-links">
               <button type="button" onClick={() => setView('password')}>
@@ -465,10 +479,10 @@ export function MyAccountScreen({
                 <ChevronRight />
               </button>
             </div>
-          </section>
+          </m.section>
 
           {(playbackPreferences || offlineMode) && (
-            <section className="my-account-link-group" aria-labelledby="my-account-group-preferences">
+            <m.section {...cardEntrance(2)} className="my-account-link-group" aria-labelledby="my-account-group-preferences">
               <span className="my-account-link-group__label" id="my-account-group-preferences">Preferências</span>
               <div className="my-account-links">
                 {playbackPreferences && (
@@ -501,11 +515,11 @@ export function MyAccountScreen({
                   </button>
                 )}
               </div>
-            </section>
+            </m.section>
           )}
 
           {currentUser.role === 'admin' && (
-            <section className="my-account-link-group" aria-labelledby="my-account-group-admin">
+            <m.section {...cardEntrance(3)} className="my-account-link-group" aria-labelledby="my-account-group-admin">
               <span className="my-account-link-group__label" id="my-account-group-admin">Sistema</span>
               <div className="my-account-links">
                 <button type="button" onClick={onOpenAdministration}>
@@ -514,10 +528,10 @@ export function MyAccountScreen({
                   <ChevronRight />
                 </button>
               </div>
-            </section>
+            </m.section>
           )}
 
-          <section className="my-account-danger" aria-labelledby="my-account-current-session-title">
+          <m.section {...cardEntrance(4)} className="my-account-danger" aria-labelledby="my-account-current-session-title">
             <div className="my-account-card__heading">
               <span className="my-account-card__icon my-account-card__icon--danger"><LogOut /></span>
               <div>
@@ -529,7 +543,7 @@ export function MyAccountScreen({
               {signingOut && <LoaderCircle className="my-account-spinner" />}
               {signingOut ? 'Saindo…' : 'Sair da conta'}
             </button>
-          </section>
+          </m.section>
           </div>
         </>
       )}
