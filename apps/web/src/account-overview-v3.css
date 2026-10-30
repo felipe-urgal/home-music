@@ -378,16 +378,6 @@
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   }
 
-  #root .desktop-layout[data-offline="false"] .my-account-v3__bottom-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px;
-  }
-
-  #root .desktop-layout[data-offline="false"] .my-account-v3__bottom-grid > :only-child {
-    grid-column: 1 / -1;
-  }
-
   #root .desktop-layout[data-offline="false"] .my-account-v3__card {
     --account-v3-rgb: 69, 150, 218;
     --account-v3-bright: #64b9ff;

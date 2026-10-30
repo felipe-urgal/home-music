@@ -5,7 +5,6 @@ import type { AuthenticatedUser } from '@home-music/shared';
 import {
   AudioLines,
   CheckCircle2,
-  CircleHelp,
   ChevronLeft,
   ChevronRight,
   Eye,
@@ -681,10 +680,6 @@ export function MyAccountScreen({
                 <ChevronLeft />
                 <span>Minha conta</span>
               </button>
-              <span className="my-account-password-v3__help" aria-label="Ajuda">
-                <CircleHelp />
-                <span>Ajuda</span>
-              </span>
             </header>
 
             <main className="my-account-password-v3__content">
