@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { m } from 'motion/react';
 import { CheckCircle2, Download, LoaderCircle, MoreHorizontal, Pause, Play, Trash2 } from 'lucide-react';
 import type { Track } from '@home-music/shared';
 import type { TrackSort } from '../library-utils';
@@ -7,6 +8,7 @@ import { formatPlayerTime } from '../player-presentation';
 import { Artwork } from './Artwork';
 import { DesktopTrackTable } from './DesktopTrackTable';
 import { MobileSheet } from './MobileSheet';
+import { LibraryMotion, cardEntrance } from './library-motion';
 
 export type LibraryTrackOfflineProps = {
   offlineSupported: boolean;
@@ -57,8 +59,9 @@ export function LibraryTrackRows({
     const offlineActionsAvailable = offlineSupported && Boolean(onDownload) && Boolean(onRemoveDownload);
 
     return (
+      <LibraryMotion>
       <div className="desktop-track-grid" data-testid="desktop-track-grid">
-        {tracks.map(track => {
+        {tracks.map((track, index) => {
           const isCurrent = track.id === current?.id;
           const downloading = downloadingIds.has(track.id);
           const downloaded = downloadedIds.has(track.id);
@@ -66,7 +69,7 @@ export function LibraryTrackRows({
           const trackArtist = track.albumArtist || track.artist || 'Artista desconhecido';
 
           return (
-            <article className={`desktop-track-card ${isCurrent ? 'is-current' : ''}`} key={track.id}>
+            <m.article className={`desktop-track-card ${isCurrent ? 'is-current' : ''}`} key={track.id} {...cardEntrance(index)}>
               <button
                 className="desktop-track-card__main"
                 type="button"
@@ -132,10 +135,11 @@ export function LibraryTrackRows({
                   )}
                 </div>
               )}
-            </article>
+            </m.article>
           );
         })}
       </div>
+      </LibraryMotion>
     );
   }
 

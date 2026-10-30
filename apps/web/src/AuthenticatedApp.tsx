@@ -1954,12 +1954,10 @@ export function AuthenticatedApp({ currentUser, onLogout, onAuthRefresh, onOpenO
 
       <MobileBottomNav
         active={mobileNavigationActive}
-        libraryTab={navigation.libraryTab}
         username={currentUser.username}
         onOpenPlayer={openPlayer}
         onOpenLibrary={() => setScreen('library')}
         onOpenFolders={() => openLibraryTab('folders')}
-        onOpenPlaylists={() => openLibraryTab('playlists')}
         onOpenAccount={() => setScreen('account')}
       />
 

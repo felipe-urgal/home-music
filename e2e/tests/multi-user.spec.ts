@@ -38,30 +38,24 @@ async function resetBrowserSession(page: Page) {
   await expect(page.getByRole('heading', { name: 'Entrar' })).toBeVisible();
 }
 
+// Pastas e playlists dividem a raiz da biblioteca em todos os tamanhos de tela.
 async function openPlaylists(page: Page) {
   const width = viewportWidth(page);
 
   if (width >= 1024) {
     const expand = page.getByRole('button', { name: 'Expandir barra superior' });
     if (await expand.isVisible().catch(() => false)) await expand.click();
-    await page.goto('/library/playlists');
-    await expect(page.locator('.desktop-layout')).toHaveAttribute('data-library-tab', 'playlists');
+    await page.goto('/library');
+  } else if (width < 700) {
+    const navigation = page.getByRole('navigation', { name: 'Navegação principal' });
+    await expect(navigation).toBeVisible();
+    await navigation.getByRole('button', { name: 'Biblioteca', exact: true }).click();
   } else {
-    if (width < 700) {
-      const navigation = page.getByRole('navigation', { name: 'Navegação principal' });
-      await expect(navigation).toBeVisible();
-      await navigation.getByRole('button', { name: 'Biblioteca', exact: true }).click();
-    } else {
-      const backToLibrary = page.getByRole('button', { name: 'Voltar à biblioteca', exact: true });
-      if (await backToLibrary.isVisible()) await backToLibrary.click();
-    }
-
-    const libraryNavigation = page.getByRole('navigation', { name: 'Navegação da biblioteca' });
-    await expect(libraryNavigation).toBeVisible();
-    await libraryNavigation.getByRole('button', { name: 'Playlists', exact: true }).click();
+    const backToLibrary = page.getByRole('button', { name: 'Voltar à biblioteca', exact: true });
+    if (await backToLibrary.isVisible()) await backToLibrary.click();
   }
 
-  await expect(page.locator('.section-heading--playlists-root')).toHaveCount(1);
+  await expect(page.locator('.library-content')).toBeVisible();
 }
 
 async function expectSharedRekordboxPlaylist(page: Page) {

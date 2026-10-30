@@ -4,7 +4,7 @@ import type { AuthenticatedUser, Playlist, Track } from '@home-music/shared';
 import { canUseAdminLibraryActions } from '../frontend-access';
 import type { OfflineCollectionDownloadInput, OfflineDownloads } from '../offline-downloads';
 import type { LibraryData } from '../useLibraryData';
-import type { LibraryNavigation, LibraryTab } from '../useLibraryNavigation';
+import type { LibraryNavigation } from '../useLibraryNavigation';
 import { useDesktopLayout } from '../useDesktopLayout';
 import { useLibraryViews } from '../useLibraryViews';
 import { DesktopFolderSummary } from './DesktopFolderSummary';
@@ -169,12 +169,6 @@ export function LibraryScreen({
     } else if (folderPath) leaveFolder();
   }
 
-  function changeTab(tab: LibraryTab) {
-    setViewControlsOpen(false);
-    setMobileCollectionMenuOpen(false);
-    selectTab(tab);
-  }
-
   function title() {
     if (selectedPlaylist) return selectedPlaylist.name;
     if (libraryTab === 'folders' && folderPath) return folderView.name;
@@ -337,7 +331,6 @@ export function LibraryScreen({
       canManageSharedLibrary={canManageSharedLibrary}
       scanning={scanning}
       onBack={goBack}
-      onChangeTab={changeTab}
       onScan={() => void scanNow()}
       onOpenPlayer={onOpenPlayer}
       detailMenuOpen={mobileCollectionMenuOpen}
