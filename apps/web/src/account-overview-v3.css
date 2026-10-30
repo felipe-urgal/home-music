@@ -285,6 +285,9 @@
     height: 330px;
     pointer-events: none;
     background: url('/account-v3-headphones.webp') right top / 384px 330px no-repeat;
+    /* A arte traz uma borda de card embutida à esquerda; o gradiente a dissolve no fundo. */
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 34%);
+    mask-image: linear-gradient(90deg, transparent 0, #000 34%);
   }
 
   #root .desktop-layout[data-offline="false"] .my-account-v3__settings {

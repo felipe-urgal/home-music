@@ -1,4 +1,6 @@
 import { useRef, useState, type FormEvent } from 'react';
+import { AnimatePresence, m } from 'motion/react';
+import { LibraryMotion, cardEntrance, cardMotion, viewTransition } from './library-motion';
 import type { AuthenticatedUser } from '@home-music/shared';
 import {
   AudioLines,
@@ -100,6 +102,8 @@ export function MyAccountScreen({
     /\d/.test(newPassword),
     /[^A-Za-z0-9\s]/.test(newPassword)
   ].filter(Boolean).length;
+  const passwordLengthMet = Array.from(newPassword).length >= MIN_ACCOUNT_PASSWORD_CHARACTERS;
+  const passwordMixMet = /[A-Za-z]/.test(newPassword) && /\d/.test(newPassword) && /[^A-Za-z0-9\s]/.test(newPassword);
   const passwordStrengthLabel = passwordStrengthScore >= 3 ? 'Forte' : passwordStrengthScore >= 2 ? 'Média' : 'Fraca';
   const passwordStrengthTone = passwordStrengthScore >= 3
     ? 'is-strong'
@@ -220,31 +224,38 @@ export function MyAccountScreen({
 
   if (view === 'playback' && playbackPreferences) {
     return (
-      <section className="my-account-screen my-account-screen--playback">
+      <LibraryMotion>
+      <m.section key="playback" className="my-account-screen my-account-screen--playback" {...viewTransition}>
         <AccountPlaybackPreferences value={playbackPreferences} onBack={goBack} />
-      </section>
+      </m.section>
+      </LibraryMotion>
     );
   }
 
   if (view === 'open-subsonic') {
     return (
-      <section className="my-account-screen my-account-screen--open-subsonic">
+      <LibraryMotion>
+      <m.section key="open-subsonic" className="my-account-screen my-account-screen--open-subsonic" {...viewTransition}>
         <header className="my-account-header"><button className="icon-button" type="button" aria-label="Voltar" onClick={goBack}><ChevronLeft /></button><strong>OpenSubsonic</strong></header>
         <AccountOpenSubsonicKeys />
-      </section>
+      </m.section>
+      </LibraryMotion>
     );
   }
 
   if (view === 'midi') {
     return (
-      <section className="my-account-screen my-account-screen--midi">
+      <LibraryMotion>
+      <m.section key="midi" className="my-account-screen my-account-screen--midi" {...viewTransition}>
         <AccountMidiControllers midi={midiController} mixerState={djMixerState} onBack={goBack} />
-      </section>
+      </m.section>
+      </LibraryMotion>
     );
   }
 
   return (
-    <section className={`my-account-screen my-account-screen--${view}`} aria-labelledby="my-account-title">
+    <LibraryMotion>
+    <m.section key={view} className={`my-account-screen my-account-screen--${view}`} aria-labelledby="my-account-title" {...viewTransition}>
       <header className="my-account-header">
         <button className="icon-button" type="button" aria-label="Voltar" onClick={goBack}><ChevronLeft /></button>
         <div>
@@ -265,15 +276,18 @@ export function MyAccountScreen({
         <>
           <div className="my-account-overview my-account-overview--v3" data-testid="my-account-prototype-three">
             <section className="my-account-v3__hero" aria-labelledby="my-account-v3-title">
-              <div className="my-account-v3__intro">
+              <m.div className="my-account-v3__intro" initial={{ opacity: 0, x: -18 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}>
                 <span className="my-account-v3__eyebrow">Minha conta</span>
                 <h1 id="my-account-v3-title">Seu som,<br />suas escolhas.</h1>
                 <p>Gerencie sua conta, defina suas preferências e mantenha tudo do seu jeito no Home Music.</p>
-              </div>
+              </m.div>
 
-              <button
+              <m.button
                 className="my-account-v3__profile-card"
                 type="button"
+                {...cardEntrance(1)}
+                whileHover={{ y: -2 }}
+                whileTap={{ scale: 0.99 }}
                 onClick={() => setView('profile')}
                 aria-label={`Abrir perfil de ${currentUser.username}`}
               >
@@ -289,9 +303,9 @@ export function MyAccountScreen({
                   <em>“Música organiza<br />o caos.”</em>
                   <small>— Home Music</small>
                 </span>
-              </button>
+              </m.button>
 
-              <div className="my-account-v3__headphones" aria-hidden="true" />
+              <m.div className="my-account-v3__headphones" aria-hidden="true" initial={{ opacity: 0, x: 28 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.6, delay: 0.15, ease: [0.22, 1, 0.36, 1] }} />
             </section>
 
             <section className="my-account-v3__settings" aria-labelledby="my-account-v3-settings-title">
@@ -307,54 +321,65 @@ export function MyAccountScreen({
               </span>
 
               <div className="my-account-v3__grid">
-                <button className="my-account-v3__card is-amber" type="button" onClick={() => setView('password')}>
+                <m.button className="my-account-v3__card is-amber" type="button"
+                  {...cardMotion(2)}
+                  onClick={() => setView('password')}>
                   <span className="my-account-v3__card-icon"><KeyRound /></span>
                   <span className="my-account-v3__card-copy">
                     <strong>Alterar senha</strong>
                     <small>Use sua senha atual para confirmar a mudança.</small>
                   </span>
                   <ChevronRight />
-                </button>
+                </m.button>
 
-                <button className="my-account-v3__card is-blue" type="button" onClick={() => setView('sessions')}>
+                <m.button className="my-account-v3__card is-blue" type="button"
+                  {...cardMotion(3)}
+                  onClick={() => setView('sessions')}>
                   <span className="my-account-v3__card-icon"><Monitor /></span>
                   <span className="my-account-v3__card-copy">
                     <strong>Outros dispositivos</strong>
                     <small>Encerre acessos antigos sem sair deste dispositivo.</small>
                   </span>
                   <ChevronRight />
-                </button>
+                </m.button>
 
                 {playbackPreferences ? (
-                  <button className="my-account-v3__card is-pink" type="button" onClick={() => setView('playback')}>
+                  <m.button className="my-account-v3__card is-pink" type="button"
+                  {...cardMotion(4)}
+                  onClick={() => setView('playback')}>
                     <span className="my-account-v3__card-icon"><SlidersHorizontal /></span>
                     <span className="my-account-v3__card-copy">
                       <strong>Reprodução</strong>
                       <small>Qualidade, conexão e normalização.</small>
                     </span>
                     <ChevronRight />
-                  </button>
+                  </m.button>
                 ) : <span className="my-account-v3__card-spacer" aria-hidden="true" />}
 
-                <button className="my-account-v3__card is-blue" type="button" onClick={() => setView('open-subsonic')}>
+                <m.button className="my-account-v3__card is-blue" type="button"
+                  {...cardMotion(5)}
+                  onClick={() => setView('open-subsonic')}>
                   <span className="my-account-v3__card-icon"><KeyRound /></span>
                   <span className="my-account-v3__card-copy"><strong>OpenSubsonic</strong><small>Gerenciar chaves para outros players.</small></span>
                   <ChevronRight />
-                </button>
+                </m.button>
 
-                <button className="my-account-v3__card is-cyan" type="button" onClick={() => setView('midi')}>
+                <m.button className="my-account-v3__card is-cyan" type="button"
+                  {...cardMotion(6)}
+                  onClick={() => setView('midi')}>
                   <span className="my-account-v3__card-icon"><Music2 /></span>
                   <span className="my-account-v3__card-copy">
                     <strong>Controlador MIDI</strong>
                     <small>Conecte hardware compatível pelo navegador.</small>
                   </span>
                   <ChevronRight />
-                </button>
+                </m.button>
 
                 {offlineMode ? (
-                  <button
+                  <m.button
                     className="my-account-v3__card is-cyan"
                     type="button"
+                    {...cardMotion(7, !offlineModeAvailable)}
                     disabled={!offlineModeAvailable}
                     aria-disabled={!offlineModeAvailable}
                     onClick={offlineModeAvailable ? offlineMode.onOpen : undefined}
@@ -365,25 +390,28 @@ export function MyAccountScreen({
                       <small>{offlineModeDetail}</small>
                     </span>
                     <ChevronRight />
-                  </button>
+                  </m.button>
                 ) : <span className="my-account-v3__card-spacer" aria-hidden="true" />}
               </div>
 
               <div className="my-account-v3__bottom-grid">
                 {currentUser.role === 'admin' && (
-                  <button className="my-account-v3__card my-account-v3__card--wide is-indigo" type="button" onClick={onOpenAdministration}>
+                  <m.button className="my-account-v3__card my-account-v3__card--wide is-indigo" type="button"
+                  {...cardMotion(8)}
+                  onClick={onOpenAdministration}>
                     <span className="my-account-v3__card-icon"><ShieldCheck /></span>
                     <span className="my-account-v3__card-copy">
                       <strong>Administração</strong>
                       <small>Usuários e controles do Home Music.</small>
                     </span>
                     <ChevronRight />
-                  </button>
+                  </m.button>
                 )}
 
-                <button
+                <m.button
                   className="my-account-v3__card my-account-v3__card--wide my-account-v3__card--danger is-red"
                   type="button"
+                    {...cardMotion(9, signingOut)}
                   disabled={signingOut}
                   onClick={() => void signOut()}
                 >
@@ -395,7 +423,7 @@ export function MyAccountScreen({
                     <small>Encerre sua sessão neste dispositivo.</small>
                   </span>
                   <ChevronRight />
-                </button>
+                </m.button>
               </div>
 
               <footer className="my-account-v3__footer" aria-hidden="true">
@@ -646,13 +674,13 @@ export function MyAccountScreen({
             </header>
 
             <main className="my-account-password-v3__content">
-              <section className="my-account-password-v3__intro" aria-labelledby="my-account-password-v3-title">
+              <m.section className="my-account-password-v3__intro" aria-labelledby="my-account-password-v3-title" {...cardEntrance(0)}>
                 <span className="my-account-password-v3__lock" aria-hidden="true"><LockKeyhole /></span>
                 <h1 id="my-account-password-v3-title">Alterar senha</h1>
                 <p>Escolha uma nova senha forte e segura.</p>
-              </section>
+              </m.section>
 
-              <form id="my-account-password-v3-form" className="my-account-password-v3__form-card" onSubmit={submitPassword}>
+              <m.form id="my-account-password-v3-form" className="my-account-password-v3__form-card" onSubmit={submitPassword} {...cardEntrance(1)}>
                 <label>
                   <span>Senha atual</span>
                   <span className="my-account-password-v3__field">
@@ -704,7 +732,12 @@ export function MyAccountScreen({
                   <strong>{passwordStrengthLabel}</strong>
                   <div className="my-account-password-v3__strength-bars" aria-hidden="true">
                     {[1, 2, 3, 4].map(level => (
-                      <i key={level} className={passwordStrengthScore >= level ? 'is-active' : ''} />
+                      <m.i
+                        key={level}
+                        className={passwordStrengthScore >= level ? 'is-active' : ''}
+                        animate={{ scaleY: passwordStrengthScore >= level ? 1.25 : 1 }}
+                        transition={{ type: 'spring', stiffness: 420, damping: 24, delay: level * 0.04 }}
+                      />
                     ))}
                   </div>
                   <small>
@@ -737,38 +770,50 @@ export function MyAccountScreen({
                   </span>
                 </label>
 
-                {(currentPassword || newPassword || confirmation) && validationError && (
-                  <small className="my-account-password-v3__hint">{validationError}</small>
-                )}
-              </form>
+                <AnimatePresence initial={false}>
+                  {(currentPassword || newPassword || confirmation) && validationError && (
+                    <m.small
+                      key="hint"
+                      className="my-account-password-v3__hint"
+                      initial={{ opacity: 0, y: -6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      transition={{ duration: 0.18 }}
+                    >
+                      {validationError}
+                    </m.small>
+                  )}
+                </AnimatePresence>
+              </m.form>
 
-              <section className="my-account-password-v3__tips" aria-labelledby="my-account-password-v3-tips-title">
+              <m.section className="my-account-password-v3__tips" aria-labelledby="my-account-password-v3-tips-title" {...cardEntrance(2)}>
                 <span className="my-account-password-v3__tips-icon" aria-hidden="true"><Lightbulb /></span>
                 <div>
                   <strong id="my-account-password-v3-tips-title">Dicas para uma senha segura</strong>
-                  <span><CheckCircle2 /> Use pelo menos {MIN_ACCOUNT_PASSWORD_CHARACTERS} caracteres</span>
-                  <span><CheckCircle2 /> Combine letras, números e símbolos</span>
+                  <m.span className={passwordLengthMet ? 'is-met' : ''} animate={{ x: passwordLengthMet ? [0, 4, 0] : 0 }} transition={{ duration: 0.3 }}><CheckCircle2 /> Use pelo menos {MIN_ACCOUNT_PASSWORD_CHARACTERS} caracteres</m.span>
+                  <m.span className={passwordMixMet ? 'is-met' : ''} animate={{ x: passwordMixMet ? [0, 4, 0] : 0 }} transition={{ duration: 0.3 }}><CheckCircle2 /> Combine letras, números e símbolos</m.span>
                   <span><CheckCircle2 /> Evite informações pessoais óbvias</span>
                 </div>
-              </section>
+              </m.section>
 
-              <button
+              <m.button
                 className="my-account-password-v3__submit"
                 type="submit"
                 form="my-account-password-v3-form"
                 disabled={changingPassword || Boolean(validationError)}
+                {...cardMotion(3, changingPassword || Boolean(validationError))}
               >
                 {changingPassword ? <LoaderCircle className="my-account-spinner" /> : <LockKeyhole />}
                 <span>{changingPassword ? 'Alterando…' : 'Alterar senha'}</span>
-              </button>
+              </m.button>
 
-              <footer className="my-account-password-v3__protected">
+              <m.footer className="my-account-password-v3__protected" {...cardEntrance(4)}>
                 <ShieldCheck />
                 <span>
                   <strong>Suas informações estão protegidas</strong>
                   <small>Usamos criptografia para manter sua conta segura.</small>
                 </span>
-              </footer>
+              </m.footer>
             </main>
           </div>
         ) : (
@@ -836,6 +881,7 @@ export function MyAccountScreen({
         onConfirm={() => void confirmSensitiveAction()}
         onClose={closeSensitiveAction}
       />
-    </section>
+    </m.section>
+    </LibraryMotion>
   );
 }

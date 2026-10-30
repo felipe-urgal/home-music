@@ -25,3 +25,14 @@ export const cardInteraction = {
   whileHover: { y: -3 },
   whileTap: { scale: 0.97 }
 } as const;
+
+/** Entrada em cascata + hover/press; cards desabilitados só entram. */
+export function cardMotion(index: number, disabled = false) {
+  return disabled ? cardEntrance(index) : { ...cardEntrance(index), ...cardInteraction };
+}
+
+export const viewTransition = {
+  initial: { opacity: 0, x: 18 },
+  animate: { opacity: 1, x: 0 },
+  transition: { duration: 0.28, ease: [0.22, 1, 0.36, 1] as const }
+};
