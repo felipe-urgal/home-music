@@ -23,7 +23,9 @@ if (!Number.isInteger(largeLibraryTrackCount) || largeLibraryTrackCount < 0 || l
   throw new Error('HOME_MUSIC_E2E_LARGE_LIBRARY_TRACKS deve ser um inteiro entre 0 e 50000.');
 }
 
-function wavFixture(durationSeconds = 10, frequency = 440) {
+// 90s: o app retoma a reprodução a cada login, e os testes reaproveitam o mesmo servidor; com poucos
+// segundos a faixa acaba no meio de um shard e a fila avança, quebrando quem espera abrir em "E2E Track".
+function wavFixture(durationSeconds = 90, frequency = 440) {
   const sampleRate = 8_000;
   const channels = 1;
   const bitsPerSample = 16;
@@ -96,9 +98,9 @@ function benchmarkTracks(trackCount) {
 await mkdir(libraryDir, { recursive: true });
 await Promise.all([
   writeFile(envPath, '# Ambiente descartável do runner E2E. As variáveis são injetadas pelo processo.\n', 'utf8'),
-  writeFile(fixturePath, wavFixture(10, 440)),
-  writeFile(secondFixturePath, wavFixture(10, 523)),
-  writeFile(thirdFixturePath, wavFixture(10, 659)),
+  writeFile(fixturePath, wavFixture(90, 440)),
+  writeFile(secondFixturePath, wavFixture(90, 523)),
+  writeFile(thirdFixturePath, wavFixture(90, 659)),
   writeFile(lyricsFixturePath, [
     '[00:00.00]Linha E2E um',
     '[00:00.60]Linha E2E dois',
